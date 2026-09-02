@@ -1,0 +1,46 @@
+source "https://rubygems.org"
+
+ruby "4.0.6"
+
+# Core
+gem "rails", "~> 8.1"
+gem "pg", "~> 1.5"
+gem "puma", "~> 6.4"
+gem "tzinfo-data", platforms: [:mingw, :mswin, :x64_mingw, :jruby]
+
+
+# API
+gem "rack-cors"
+gem "jbuilder"
+
+# Auth
+gem "bcrypt", "~> 3.1"
+gem "jwt"
+
+gem "fiddle"
+
+# Env vars
+gem "dotenv-rails", groups: [:development, :test]
+
+# Pagination
+gem "kaminari"
+
+# Utilities
+gem "bootsnap", require: false
+
+group :development, :test do
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+  gem "faker"
+end
+
+group :development do
+  gem "listen"
+end
+
+group :test do
+  gem "shoulda-matchers"
+  gem "database_cleaner-active_record"
+end
+
+gem "csv"

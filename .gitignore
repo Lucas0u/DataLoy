@@ -1,0 +1,23 @@
+# Ruby / Rails
+backend/.bundle/
+backend/log/*
+backend/tmp/*
+backend/storage/*
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/config/master.key
+backend/config/credentials/*.key
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Sistema
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

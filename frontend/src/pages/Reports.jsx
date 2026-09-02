@@ -1,0 +1,343 @@
+import { useEffect, useState } from "react";
+import { FileText, RefreshCw } from "lucide-react";
+import api from "../services/api";
+import ReportFilters from "../components/reports/ReportFilters";
+import ReportSummary from "../components/reports/ReportSummary";
+import ReportsTable from "../components/reports/ReportsTable";
+import CustomerReport from "../components/reports/CustomerReport";
+import PointsReport from "../components/reports/PointsReport";
+import MovementsReport from "../components/reports/MovementsReport";
+
+const REPORT_TABS = [
+  { id: "sales", label: "Vendas" },
+  { id: "customers", label: "Clientes" },
+  { id: "points", label: "Pontos" },
+  { id: "movements", label: "Movimentações" },
+];
+
+const initialFilters = { start_date: "", end_date: "", customer_id: "" };
+
+function formatDate(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+export default function Reports() {
+  const [activeTab, setActiveTab] = useState("sales");
+
+  const [filters, setFilters] = useState(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+
+  const [customers, setCustomers] = useState([]);
+
+  const [salesReport, setSalesReport] = useState({
+    summary: {
+      total_sales: 0,
+      total_revenue: 0,
+      average_ticket: 0,
+      customers_count: 0,
+      total_points_generated: 0,
+      highest_sale: 0,
+    },
+    sales: [],
+  });
+  const [customerReport, setCustomerReport] = useState({
+    summary: {
+      total_customers: 0,
+      active_customers: 0,
+      inactive_customers: 0,
+      customers_with_sales: 0,
+      total_revenue: 0,
+      average_ticket: 0,
+    },
+    customers: [],
+  });
+  const [pointsReport, setPointsReport] = useState({
+    summary: {
+      total_earned: 0,
+      total_redeemed: 0,
+      total_adjustments: 0,
+      total_transactions: 0,
+      customers_with_points: 0,
+      current_balance: 0,
+    },
+    customers: [],
+  });
+  const [movementsReport, setMovementsReport] = useState({
+    summary: {
+      total_movements: 0,
+      total_earned: 0,
+      total_redeemed: 0,
+      total_adjustments: 0,
+    },
+    movements: [],
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadCustomers() {
+    try {
+      const response = await api.get("/api/v1/customers", {
+        params: { page: 1, per_page: 100 },
+      });
+      setCustomers(response.data.data || []);
+    } catch (err) {
+      console.error("Erro ao carregar clientes:", err);
+    }
+  }
+
+  function buildParams(customFilters) {
+    return {
+      start_date: customFilters.start_date || undefined,
+      end_date: customFilters.end_date || undefined,
+      customer_id: customFilters.customer_id || undefined,
+    };
+  }
+
+  async function loadActiveReport(customFilters = filters) {
+    try {
+      setLoading(true);
+      setError("");
+
+      if (activeTab === "sales") {
+        const response = await api.get("/api/v1/reports", {
+          params: buildParams(customFilters),
+        });
+        setSalesReport({
+          summary: response.data.summary || {},
+          sales: response.data.sales || [],
+        });
+      } else if (activeTab === "customers") {
+        const response = await api.get("/api/v1/reports/customers");
+        setCustomerReport({
+          summary: response.data.summary || {},
+          customers: response.data.customers || [],
+        });
+      } else if (activeTab === "points") {
+        const response = await api.get("/api/v1/reports/points");
+        setPointsReport({
+          summary: response.data.summary || {},
+          customers: response.data.customers || [],
+        });
+      } else if (activeTab === "movements") {
+        const response = await api.get("/api/v1/reports/movements", {
+          params: buildParams(customFilters),
+        });
+        setMovementsReport({
+          summary: response.data.summary || {},
+          movements: response.data.movements || [],
+        });
+      }
+
+      setAppliedFilters(customFilters);
+    } catch (err) {
+      console.error("Erro ao carregar relatório:", err);
+      setError(
+        err.response?.data?.error || "Não foi possível carregar o relatório."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  useEffect(() => {
+    loadActiveReport(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  function handleFilterChange(field, value) {
+    setFilters((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleApply() {
+    if (
+      filters.start_date &&
+      filters.end_date &&
+      filters.start_date > filters.end_date
+    ) {
+      setError("A data inicial não pode ser posterior à data final.");
+      return;
+    }
+    loadActiveReport(filters);
+  }
+
+  function handleClear() {
+    setFilters(initialFilters);
+    loadActiveReport(initialFilters);
+  }
+
+  async function handleExport() {
+    try {
+      setExporting(true);
+      setError("");
+
+      const response = await api.get("/api/v1/reports/export", {
+        params: buildParams(appliedFilters),
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute(
+        "download",
+        `relatorio_vendas_${new Date().toISOString().slice(0, 10)}.csv`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Erro ao exportar relatório:", err);
+      setError(
+        err.response?.data?.error || "Não foi possível exportar o relatório."
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const hasActiveFilters =
+    appliedFilters.start_date ||
+    appliedFilters.end_date ||
+    appliedFilters.customer_id;
+  const selectedCustomer = customers.find(
+    (c) => String(c.id) === String(appliedFilters.customer_id)
+  );
+  const showFilters = activeTab === "sales" || activeTab === "movements";
+
+  function getPeriodLabel() {
+    if (appliedFilters.start_date && appliedFilters.end_date) {
+      return `${formatDate(appliedFilters.start_date)} até ${formatDate(appliedFilters.end_date)}`;
+    }
+    if (appliedFilters.start_date)
+      return `A partir de ${formatDate(appliedFilters.start_date)}`;
+    if (appliedFilters.end_date)
+      return `Até ${formatDate(appliedFilters.end_date)}`;
+    return "Todo o período";
+  }
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <FileText size={21} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Relatórios</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Analise vendas, clientes, pontos e movimentações para apoiar a
+              tomada de decisões.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => loadActiveReport(appliedFilters)}
+          disabled={loading || exporting}
+          className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+          Atualizar
+        </button>
+      </div>
+
+      <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
+        {REPORT_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              activeTab === tab.id
+                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {showFilters && (
+        <ReportFilters
+          filters={filters}
+          appliedFilters={appliedFilters}
+          customers={customers}
+          onChange={handleFilterChange}
+          onApply={handleApply}
+          onClear={handleClear}
+          onExport={activeTab === "sales" ? handleExport : undefined}
+          loading={loading || exporting}
+        />
+      )}
+
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {showFilters && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Período analisado
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">
+                {getPeriodLabel()}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedCustomer && (
+                <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
+                  Cliente: {selectedCustomer.name}
+                </span>
+              )}
+              {!hasActiveFilters && (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                  Sem filtros adicionais
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex min-h-[300px] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600" />
+        </div>
+      ) : (
+        <>
+          {activeTab === "sales" && (
+            <>
+              <ReportSummary summary={salesReport.summary} />
+              <ReportsTable sales={salesReport.sales} />
+            </>
+          )}
+          {activeTab === "customers" && (
+            <CustomerReport report={customerReport} />
+          )}
+          {activeTab === "points" && <PointsReport report={pointsReport} />}
+          {activeTab === "movements" && (
+            <MovementsReport report={movementsReport} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
