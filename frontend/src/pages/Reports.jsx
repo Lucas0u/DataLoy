@@ -15,11 +15,19 @@ const REPORT_TABS = [
   { id: "movements", label: "Movimentações" },
 ];
 
-const initialFilters = { start_date: "", end_date: "", customer_id: "" };
+const initialFilters = {
+  start_date: "",
+  end_date: "",
+  customer_id: "",
+  status: "",
+  transaction_type: "",
+};
 
 function formatDate(value) {
   if (!value) return null;
+
   const [year, month, day] = value.split("-");
+
   return `${day}/${month}/${year}`;
 }
 
@@ -42,6 +50,7 @@ export default function Reports() {
     },
     sales: [],
   });
+
   const [customerReport, setCustomerReport] = useState({
     summary: {
       total_customers: 0,
@@ -53,6 +62,7 @@ export default function Reports() {
     },
     customers: [],
   });
+
   const [pointsReport, setPointsReport] = useState({
     summary: {
       total_earned: 0,
@@ -64,6 +74,7 @@ export default function Reports() {
     },
     customers: [],
   });
+
   const [movementsReport, setMovementsReport] = useState({
     summary: {
       total_movements: 0,
@@ -81,8 +92,12 @@ export default function Reports() {
   async function loadCustomers() {
     try {
       const response = await api.get("/api/v1/customers", {
-        params: { page: 1, per_page: 100 },
+        params: {
+          page: 1,
+          per_page: 100,
+        },
       });
+
       setCustomers(response.data.data || []);
     } catch (err) {
       console.error("Erro ao carregar clientes:", err);
@@ -94,6 +109,8 @@ export default function Reports() {
       start_date: customFilters.start_date || undefined,
       end_date: customFilters.end_date || undefined,
       customer_id: customFilters.customer_id || undefined,
+      status: customFilters.status || undefined,
+      transaction_type: customFilters.transaction_type || undefined,
     };
   }
 
@@ -102,39 +119,56 @@ export default function Reports() {
       setLoading(true);
       setError("");
 
+      const params = buildParams(customFilters);
+
       if (activeTab === "sales") {
         const response = await api.get("/api/v1/reports", {
-          params: buildParams(customFilters),
+          params,
         });
+
         setSalesReport({
           summary: response.data.summary || {},
           sales: response.data.sales || [],
         });
-      } else if (activeTab === "customers") {
-        const response = await api.get("/api/v1/reports/customers");
+      }
+
+      if (activeTab === "customers") {
+        const response = await api.get("/api/v1/reports/customers", {
+          params,
+        });
+
         setCustomerReport({
           summary: response.data.summary || {},
           customers: response.data.customers || [],
         });
-      } else if (activeTab === "points") {
-        const response = await api.get("/api/v1/reports/points");
+      }
+
+      if (activeTab === "points") {
+        const response = await api.get("/api/v1/reports/points", {
+          params,
+        });
+
         setPointsReport({
           summary: response.data.summary || {},
           customers: response.data.customers || [],
         });
-      } else if (activeTab === "movements") {
+      }
+
+      if (activeTab === "movements") {
         const response = await api.get("/api/v1/reports/movements", {
-          params: buildParams(customFilters),
+          params,
         });
+
         setMovementsReport({
           summary: response.data.summary || {},
           movements: response.data.movements || [],
         });
       }
 
-      setAppliedFilters(customFilters);
+      setAppliedFilters({ ...customFilters });
     } catch (err) {
       console.error("Erro ao carregar relatório:", err);
+
       setError(
         err.response?.data?.error || "Não foi possível carregar o relatório."
       );
@@ -148,12 +182,15 @@ export default function Reports() {
   }, []);
 
   useEffect(() => {
-    loadActiveReport(filters);
+    loadActiveReport(appliedFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   function handleFilterChange(field, value) {
-    setFilters((current) => ({ ...current, [field]: value }));
+    setFilters((current) => ({
+      ...current,
+      [field]: value,
+    }));
   }
 
   function handleApply() {
@@ -165,12 +202,113 @@ export default function Reports() {
       setError("A data inicial não pode ser posterior à data final.");
       return;
     }
+
     loadActiveReport(filters);
   }
 
   function handleClear() {
-    setFilters(initialFilters);
-    loadActiveReport(initialFilters);
+    const clearedFilters = {
+      ...initialFilters,
+    };
+
+    setFilters(clearedFilters);
+    loadActiveReport(clearedFilters);
+  }
+
+  function getFilterConfig() {
+    switch (activeTab) {
+      case "customers":
+        return {
+          showStatus: true,
+          showTransactionType: false,
+        };
+
+      case "points":
+        return {
+          showStatus: false,
+          showTransactionType: true,
+        };
+
+      case "movements":
+        return {
+          showStatus: false,
+          showTransactionType: true,
+        };
+
+      case "sales":
+      default:
+        return {
+          showStatus: false,
+          showTransactionType: false,
+        };
+    }
+  }
+
+  const filterConfig = getFilterConfig();
+
+  const selectedCustomer = customers.find(
+    (customer) => String(customer.id) === String(appliedFilters.customer_id)
+  );
+
+  const hasActiveFilters =
+    appliedFilters.start_date ||
+    appliedFilters.end_date ||
+    appliedFilters.customer_id ||
+    appliedFilters.status ||
+    appliedFilters.transaction_type;
+
+  function getPeriodLabel() {
+    if (appliedFilters.start_date && appliedFilters.end_date) {
+      return `${formatDate(appliedFilters.start_date)} até ${formatDate(
+        appliedFilters.end_date
+      )}`;
+    }
+
+    if (appliedFilters.start_date) {
+      return `A partir de ${formatDate(appliedFilters.start_date)}`;
+    }
+
+    if (appliedFilters.end_date) {
+      return `Até ${formatDate(appliedFilters.end_date)}`;
+    }
+
+    return "Todo o período";
+  }
+
+  function getExportEndpoint() {
+    switch (activeTab) {
+      case "customers":
+        return "/api/v1/reports/export_customers";
+
+      case "points":
+        return "/api/v1/reports/export_points";
+
+      case "movements":
+        return "/api/v1/reports/export_movements";
+
+      case "sales":
+      default:
+        return "/api/v1/reports/export";
+    }
+  }
+
+  function getExportFilename() {
+    const date = new Date().toISOString().slice(0, 10);
+
+    switch (activeTab) {
+      case "customers":
+        return `relatorio_clientes_${date}.xlsx`;
+
+      case "points":
+        return `relatorio_pontos_${date}.xlsx`;
+
+      case "movements":
+        return `relatorio_movimentacoes_${date}.xlsx`;
+
+      case "sales":
+      default:
+        return `relatorio_vendas_${date}.xlsx`;
+    }
   }
 
   async function handleExport() {
@@ -178,53 +316,35 @@ export default function Reports() {
       setExporting(true);
       setError("");
 
-      const response = await api.get("/api/v1/reports/export", {
+      const response = await api.get(getExportEndpoint(), {
         params: buildParams(appliedFilters),
         responseType: "blob",
       });
 
       const blob = new Blob([response.data], {
-        type: "text/csv;charset=utf-8;",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
+
       const url = window.URL.createObjectURL(blob);
+
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute(
-        "download",
-        `relatorio_vendas_${new Date().toISOString().slice(0, 10)}.csv`
-      );
+      link.download = getExportFilename();
+
       document.body.appendChild(link);
       link.click();
       link.remove();
+
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Erro ao exportar relatório:", err);
+
       setError(
-        err.response?.data?.error || "Não foi possível exportar o relatório."
+        "Não foi possível exportar o relatório. Verifique se o servidor está funcionando."
       );
     } finally {
       setExporting(false);
     }
-  }
-
-  const hasActiveFilters =
-    appliedFilters.start_date ||
-    appliedFilters.end_date ||
-    appliedFilters.customer_id;
-  const selectedCustomer = customers.find(
-    (c) => String(c.id) === String(appliedFilters.customer_id)
-  );
-  const showFilters = activeTab === "sales" || activeTab === "movements";
-
-  function getPeriodLabel() {
-    if (appliedFilters.start_date && appliedFilters.end_date) {
-      return `${formatDate(appliedFilters.start_date)} até ${formatDate(appliedFilters.end_date)}`;
-    }
-    if (appliedFilters.start_date)
-      return `A partir de ${formatDate(appliedFilters.start_date)}`;
-    if (appliedFilters.end_date)
-      return `Até ${formatDate(appliedFilters.end_date)}`;
-    return "Todo o período";
   }
 
   return (
@@ -234,8 +354,10 @@ export default function Reports() {
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
             <FileText size={21} />
           </div>
+
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Relatórios</h1>
+
             <p className="mt-1 text-sm text-slate-500">
               Analise vendas, clientes, pontos e movimentações para apoiar a
               tomada de decisões.
@@ -254,7 +376,7 @@ export default function Reports() {
         </button>
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
+      <div className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
         {REPORT_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -271,18 +393,18 @@ export default function Reports() {
         ))}
       </div>
 
-      {showFilters && (
-        <ReportFilters
-          filters={filters}
-          appliedFilters={appliedFilters}
-          customers={customers}
-          onChange={handleFilterChange}
-          onApply={handleApply}
-          onClear={handleClear}
-          onExport={activeTab === "sales" ? handleExport : undefined}
-          loading={loading || exporting}
-        />
-      )}
+      <ReportFilters
+        filters={filters}
+        appliedFilters={appliedFilters}
+        customers={customers}
+        onChange={handleFilterChange}
+        onApply={handleApply}
+        onClear={handleClear}
+        onExport={handleExport}
+        loading={loading || exporting}
+        showStatus={filterConfig.showStatus}
+        showTransactionType={filterConfig.showTransactionType}
+      />
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
@@ -290,32 +412,51 @@ export default function Reports() {
         </div>
       )}
 
-      {showFilters && (
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Período analisado
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">
-                {getPeriodLabel()}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {selectedCustomer && (
-                <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
-                  Cliente: {selectedCustomer.name}
-                </span>
-              )}
-              {!hasActiveFilters && (
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
-                  Sem filtros adicionais
-                </span>
-              )}
-            </div>
+      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Período analisado
+            </p>
+
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              {getPeriodLabel()}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedCustomer && (
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
+                Cliente: {selectedCustomer.name}
+              </span>
+            )}
+
+            {appliedFilters.status && (
+              <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600">
+                Status:{" "}
+                {appliedFilters.status === "active" ? "Ativos" : "Inativos"}
+              </span>
+            )}
+
+            {appliedFilters.transaction_type && (
+              <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-600">
+                Tipo:{" "}
+                {appliedFilters.transaction_type === "earned"
+                  ? "Ganhos"
+                  : appliedFilters.transaction_type === "redeemed"
+                    ? "Resgates"
+                    : "Ajustes"}
+              </span>
+            )}
+
+            {!hasActiveFilters && (
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                Sem filtros adicionais
+              </span>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {loading ? (
         <div className="flex min-h-[300px] items-center justify-center">
@@ -329,10 +470,13 @@ export default function Reports() {
               <ReportsTable sales={salesReport.sales} />
             </>
           )}
+
           {activeTab === "customers" && (
             <CustomerReport report={customerReport} />
           )}
+
           {activeTab === "points" && <PointsReport report={pointsReport} />}
+
           {activeTab === "movements" && (
             <MovementsReport report={movementsReport} />
           )}

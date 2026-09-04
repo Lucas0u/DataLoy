@@ -4,6 +4,8 @@ import {
   Filter,
   RotateCcw,
   UserRound,
+  Users,
+  ArrowUpDown,
 } from "lucide-react";
 
 function formatDate(value) {
@@ -22,11 +24,15 @@ export default function ReportFilters({
   onClear,
   onExport,
   loading = false,
+  showStatus = false,
+  showTransactionType = false,
 }) {
   const hasAppliedFilters =
     appliedFilters?.start_date ||
     appliedFilters?.end_date ||
-    appliedFilters?.customer_id;
+    appliedFilters?.customer_id ||
+    appliedFilters?.status ||
+    appliedFilters?.transaction_type;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -44,7 +50,7 @@ export default function ReportFilters({
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Defina o período e o cliente que deseja analisar.
+                Defina os critérios que deseja utilizar na análise.
               </p>
             </div>
           </div>
@@ -130,7 +136,58 @@ export default function ReportFilters({
             </select>
           </div>
 
-          {/* Ações */}
+          {/* Status - somente Clientes */}
+          {showStatus && (
+            <div>
+              <label
+                htmlFor="report-status"
+                className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-600"
+              >
+                <Users size={15} />
+                Status
+              </label>
+
+              <select
+                id="report-status"
+                value={filters.status}
+                onChange={(event) => onChange("status", event.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+              >
+                <option value="">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+            </div>
+          )}
+
+          {/* Tipo - Pontos e Movimentações */}
+          {showTransactionType && (
+            <div>
+              <label
+                htmlFor="report-transaction-type"
+                className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-600"
+              >
+                <ArrowUpDown size={15} />
+                Tipo
+              </label>
+
+              <select
+                id="report-transaction-type"
+                value={filters.transaction_type}
+                onChange={(event) =>
+                  onChange("transaction_type", event.target.value)
+                }
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+              >
+                <option value="">Todos os tipos</option>
+                <option value="earned">Ganhos</option>
+                <option value="redeemed">Resgates</option>
+                <option value="adjustment">Ajustes</option>
+              </select>
+            </div>
+          )}
+
+          {/* Botões */}
           <div className="flex items-end gap-2">
             <button
               type="submit"
@@ -154,7 +211,7 @@ export default function ReportFilters({
           </div>
         </form>
 
-        {/* Resumo dos filtros */}
+        {/* Critérios selecionados */}
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
           <div className="flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium text-slate-600">
@@ -176,27 +233,30 @@ export default function ReportFilters({
         </div>
 
         {/* Exportação */}
-        <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-slate-600">
-              Exportar relatório
-            </p>
+        {onExport && (
+          <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">
+                Exportar relatório
+              </p>
 
-            <p className="mt-0.5 text-xs text-slate-400">
-              O arquivo CSV utilizará os filtros atualmente aplicados.
-            </p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                O arquivo utilizará os filtros atualmente aplicados.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download size={17} />
+
+              {loading ? "Preparando..." : "Exportar Excel"}
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onExport}
-            disabled={loading}
-            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download size={17} />
-            {loading ? "Preparando..." : "Exportar CSV"}
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );

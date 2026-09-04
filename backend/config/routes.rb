@@ -13,6 +13,9 @@ Rails.application.routes.draw do
       get "reports/customers", to: "reports#customers"
       get "reports/points", to: "reports#points"
       get "reports/movements", to: "reports#movements"
+      get "reports/export_customers", to: "reports#export_customers"
+      get "reports/export_points", to: "reports#export_points"
+      get "reports/export_movements", to: "reports#export_movements"
 
       resources :customers, except: [:destroy] do
         member do
