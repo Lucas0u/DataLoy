@@ -316,7 +316,7 @@ export default function Reports() {
       setExporting(true);
       setError("");
 
-      const response = await api.get(getExportEndpoint(), {
+      const response = await api.get("/api/v1/reports/export", {
         params: buildParams(appliedFilters),
         responseType: "blob",
       });
@@ -324,23 +324,21 @@ export default function Reports() {
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-
       const url = window.URL.createObjectURL(blob);
-
       const link = document.createElement("a");
       link.href = url;
-      link.download = getExportFilename();
-
+      link.setAttribute(
+        "download",
+        `relatorio_vendas_${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
-
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Erro ao exportar relatório:", err);
-
       setError(
-        "Não foi possível exportar o relatório. Verifique se o servidor está funcionando."
+        err.response?.data?.error || "Não foi possível exportar o relatório."
       );
     } finally {
       setExporting(false);

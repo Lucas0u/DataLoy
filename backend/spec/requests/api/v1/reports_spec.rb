@@ -120,28 +120,27 @@ RSpec.describe "Api::V1::Reports", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "retorna um arquivo CSV" do
-        expect(response.media_type).to eq("text/csv")
+      it "retorna um arquivo Excel" do
+        expect(response.media_type).to eq("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
       end
 
       it "contém os cabeçalhos do relatório" do
-        expect(response.body).to include(
-          "ID Venda",
-          "Data",
-          "Cliente",
-          "Colaborador",
-          "Valor Total",
-          "Pontos Gerados"
-        )
+        sheet_xml = xlsx_sheet_xml(response.body)
+
+        expect(sheet_xml).to include("ID Venda")
+        expect(sheet_xml).to include("Data")
+        expect(sheet_xml).to include("Cliente")
+        expect(sheet_xml).to include("Colaborador")
+        expect(sheet_xml).to include("Valor Total")
+        expect(sheet_xml).to include("Pontos Gerados")
       end
 
       it "contém os dados da venda" do
-        expect(response.body).to include(
-          customer.name,
-          admin.name,
-          "100.0",
-          "100"
-        )
+        sheet_xml = xlsx_sheet_xml(response.body)
+
+        expect(sheet_xml).to include(customer.name)
+        expect(sheet_xml).to include(admin.name)
+        expect(sheet_xml).to include("100")
       end
     end
 
