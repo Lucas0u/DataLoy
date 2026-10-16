@@ -1,4 +1,6 @@
 import { X } from "lucide-react";
+import PaymentMethodBadge from "./PaymentMethodBadge";
+import { getChargedAmount } from "../../utils/payment";
 
 export default function SaleDetailsModal({ sale, onClose }) {
   if (!sale) return null;
@@ -47,7 +49,7 @@ export default function SaleDetailsModal({ sale, onClose }) {
 
         {/* Informações */}
         <div className="space-y-6 p-6">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                 Cliente
@@ -76,6 +78,16 @@ export default function SaleDetailsModal({ sale, onClose }) {
               <p className="mt-2 text-sm font-semibold text-slate-800">
                 {sale.user?.name || "-"}
               </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                Forma de pagamento
+              </p>
+
+              <div className="mt-2">
+                <PaymentMethodBadge method={sale.payment_method} />
+              </div>
             </div>
           </div>
 
@@ -133,11 +145,11 @@ export default function SaleDetailsModal({ sale, onClose }) {
 
             <div className="text-left sm:text-right">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Total da venda
+                Valor cobrado
               </p>
 
               <p className="mt-1 text-xl font-bold text-slate-900">
-                {formatCurrency(sale.total_amount)}
+                {formatCurrency(getChargedAmount(sale))}
               </p>
             </div>
           </div>

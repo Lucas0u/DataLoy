@@ -4,6 +4,7 @@ import { CircleDollarSign, Plus, ShoppingCart, Star } from "lucide-react";
 import SalesTable from "../components/sales/SalesTable";
 import SaleFormModal from "../components/sales/SaleFormModal";
 import SaleDetailsModal from "../components/sales/SaleDetailsModal";
+import { getChargedAmount } from "../utils/payment";
 import api from "../services/api";
 
 export default function Sales() {
@@ -47,7 +48,7 @@ export default function Sales() {
   const totalSales = sales.length;
 
   const totalRevenue = sales.reduce(
-    (total, sale) => total + Number(sale.total_amount || 0),
+    (total, sale) => total + getChargedAmount(sale),
     0
   );
 

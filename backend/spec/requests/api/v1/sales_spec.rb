@@ -46,6 +46,7 @@ RSpec.describe "Api::V1::Sales", type: :request do
       {
         sale: {
           customer_id: customer.id,
+          payment_method: "pix",
           sale_items: [
             {
               product_name: "Camiseta",
@@ -55,6 +56,16 @@ RSpec.describe "Api::V1::Sales", type: :request do
           ]
         }
       }
+    end
+
+    def card_params(final_amount:, card_fee_percentage: nil)
+      sale_params.deep_merge(
+        sale: {
+          payment_method: "cartao",
+          final_amount: final_amount,
+          card_fee_percentage: card_fee_percentage
+        }
+      )
     end
 
     context "quando autenticado" do
@@ -101,6 +112,43 @@ RSpec.describe "Api::V1::Sales", type: :request do
         expect(item.unit_price).to eq(50.0)
       end
 
+      it "salva a forma de pagamento e usa o total como valor cobrado no Pix" do
+        post "/api/v1/sales",
+             params: sale_params,
+             headers: auth_headers(admin)
+
+        sale = Sale.last
+
+        expect(sale.payment_method).to eq("pix")
+        expect(sale.final_amount).to eq(100.0)
+        expect(sale.card_fee_percentage).to be_nil
+      end
+
+      it "salva o valor da maquininha no cartão" do
+        post "/api/v1/sales",
+             params: card_params(final_amount: 96.5, card_fee_percentage: 3.5),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+
+        sale = Sale.last
+
+        expect(sale.payment_method).to eq("cartao")
+        expect(sale.final_amount).to eq(96.5)
+        expect(sale.card_fee_percentage).to eq(3.5)
+      end
+
+      it "calcula os pontos pelo valor dos produtos, não pelo valor cobrado" do
+        post "/api/v1/sales",
+             params: card_params(final_amount: 96.5),
+             headers: auth_headers(admin)
+
+        sale = Sale.last
+
+        expect(sale.total_amount).to eq(100.0)
+        expect(sale.points_earned).to eq(100)
+      end
+
       it "cria a transação de pontos" do
         expect {
           post "/api/v1/sales",
@@ -142,6 +190,63 @@ RSpec.describe "Api::V1::Sales", type: :request do
              headers: auth_headers(admin)
 
         expect(response).to have_http_status(:not_found)
+      end
+    end
+
+    context "quando a forma de pagamento é inválida" do
+      it "retorna status 422 sem forma de pagamento" do
+        post "/api/v1/sales",
+             params: sale_params.deep_merge(sale: { payment_method: "" }),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "retorna status 422 para forma desconhecida" do
+        post "/api/v1/sales",
+             params: sale_params.deep_merge(sale: { payment_method: "boleto" }),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "retorna status 422 no cartão sem valor cobrado" do
+        expect {
+          post "/api/v1/sales",
+               params: card_params(final_amount: ""),
+               headers: auth_headers(admin)
+        }.not_to change(Sale, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+
+    context "quando os valores passam de 1.000.000" do
+      it "recusa preço unitário acima do limite" do
+        params = sale_params.deep_dup
+        params[:sale][:sale_items][0][:unit_price] = 1_000_001
+
+        post "/api/v1/sales", params: params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "recusa total da venda acima do limite" do
+        params = sale_params.deep_dup
+        params[:sale][:sale_items][0][:quantity] = 3
+        params[:sale][:sale_items][0][:unit_price] = 500_000
+
+        post "/api/v1/sales", params: params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "recusa valor cobrado acima do limite" do
+        post "/api/v1/sales",
+             params: card_params(final_amount: 1_000_001),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_entity)
       end
     end
 

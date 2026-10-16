@@ -1,4 +1,6 @@
 import { FileText, Star, Users } from "lucide-react";
+import PaymentMethodBadge from "../sales/PaymentMethodBadge";
+import { getChargedAmount } from "../../utils/payment";
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("pt-BR", {
@@ -27,7 +29,7 @@ function formatDate(value) {
 
 export default function ReportsTable({ sales = [] }) {
   const totalRevenue = sales.reduce(
-    (total, sale) => total + (Number(sale.total_amount) || 0),
+    (total, sale) => total + getChargedAmount(sale),
     0
   );
 
@@ -86,15 +88,16 @@ export default function ReportsTable({ sales = [] }) {
         <>
           {/* Tabela */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr className="text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-6 py-3.5 font-semibold">Venda</th>
                   <th className="px-6 py-3.5 font-semibold">Data</th>
                   <th className="px-6 py-3.5 font-semibold">Cliente</th>
                   <th className="px-6 py-3.5 font-semibold">Colaborador</th>
+                  <th className="px-6 py-3.5 font-semibold">Pagamento</th>
                   <th className="px-6 py-3.5 text-right font-semibold">
-                    Valor
+                    Valor cobrado
                   </th>
                   <th className="px-6 py-3.5 text-right font-semibold">
                     Pontos
@@ -138,10 +141,15 @@ export default function ReportsTable({ sales = [] }) {
                         {sale.user?.name || "Não informado"}
                       </td>
 
-                      {/* Valor */}
+                      {/* Pagamento */}
+                      <td className="px-6 py-4">
+                        <PaymentMethodBadge method={sale.payment_method} />
+                      </td>
+
+                      {/* Valor cobrado */}
                       <td className="px-6 py-4 text-right">
                         <span className="font-semibold text-slate-800">
-                          {formatCurrency(sale.total_amount)}
+                          {formatCurrency(getChargedAmount(sale))}
                         </span>
                       </td>
 
@@ -161,7 +169,7 @@ export default function ReportsTable({ sales = [] }) {
               <tfoot className="border-t-2 border-slate-200 bg-slate-50">
                 <tr>
                   <td
-                    colSpan="4"
+                    colSpan="5"
                     className="px-6 py-4 text-right text-sm font-semibold text-slate-600"
                   >
                     Total do período

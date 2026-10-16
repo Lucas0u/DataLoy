@@ -10,7 +10,8 @@ class Api::V1::DashboardController < ApplicationController
       inactive_customers: customers_without_recent_purchases,
       sales_by_month: sales_by_month,
       customers_by_month: customers_by_month,
-      most_redeemed_rewards: most_redeemed_rewards
+      most_redeemed_rewards: most_redeemed_rewards,
+      sales_by_payment_method: sales_by_payment_method
     }, status: :ok
   end
 
@@ -18,7 +19,7 @@ class Api::V1::DashboardController < ApplicationController
 
   def overview_metrics
     total_sales = current_store.sales.count
-    total_revenue = current_store.sales.sum(:total_amount)
+    total_revenue = current_store.sales.sum(Arel.sql(Sale::CHARGED_AMOUNT_SQL))
 
     {
       total_customers: current_store.customers.count,
@@ -52,7 +53,7 @@ class Api::V1::DashboardController < ApplicationController
                    "customers.id,
                     customers.name,
                     COUNT(sales.id) AS sales_count,
-                    SUM(sales.total_amount) AS total_spent"
+                    SUM(#{Sale::CHARGED_AMOUNT_SQL}) AS total_spent"
                  )
                  .order("total_spent DESC")
                  .limit(5)
@@ -99,7 +100,7 @@ class Api::V1::DashboardController < ApplicationController
                  .order(
                    Arel.sql("DATE_TRUNC('month', created_at)")
                  )
-                 .sum(:total_amount)
+                 .sum(Arel.sql(Sale::CHARGED_AMOUNT_SQL))
                  .map do |date, total|
       {
         month: date.strftime("%Y-%m"),
@@ -124,6 +125,25 @@ class Api::V1::DashboardController < ApplicationController
         count: count
       }
     end
+  end
+
+  # Quantidade de vendas e valor cobrado por forma de pagamento
+  # (vendas antigas, sem forma de pagamento, vêm com payment_method nulo)
+  def sales_by_payment_method
+    current_store.sales
+                 .group(:payment_method)
+                 .pluck(
+                   :payment_method,
+                   Arel.sql("COUNT(sales.id)"),
+                   Arel.sql("SUM(#{Sale::CHARGED_AMOUNT_SQL})")
+                 )
+                 .map do |payment_method, sales_count, total|
+      {
+        payment_method: payment_method,
+        sales_count: sales_count,
+        total: total.to_f
+      }
+    end.sort_by { |item| -item[:total] }
   end
 
   def most_redeemed_rewards

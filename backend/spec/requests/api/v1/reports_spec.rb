@@ -38,6 +38,16 @@ RSpec.describe "Api::V1::Reports", type: :request do
         expect(json_response["sales"].size).to eq(1)
       end
 
+      it "retorna a forma de pagamento e o valor cobrado de cada venda" do
+        expect(json_response["sales"].first).to include("payment_method", "final_amount")
+      end
+
+      it "retorna o resumo por forma de pagamento" do
+        expect(json_response["summary"]["by_payment_method"]).to eq(
+          [{ "payment_method" => "pix", "sales_count" => 1, "total" => 100.0 }]
+        )
+      end
+
       it "retorna os filtros aplicados" do
         expect(json_response).to have_key("filters_applied")
         expect(json_response["filters_applied"]).to include(
@@ -45,6 +55,23 @@ RSpec.describe "Api::V1::Reports", type: :request do
           "end_date" => nil,
           "customer_id" => nil,
           "user_id" => nil
+        )
+      end
+    end
+
+    context "com venda no cartão" do
+      before do
+        create(:sale, :card, store: store, customer: customer, user: admin,
+                             total_amount: 100.0, final_amount: 96.5, points_earned: 100)
+
+        get "/api/v1/reports", headers: auth_headers(admin)
+      end
+
+      it "usa o valor cobrado no faturamento e na maior venda" do
+        expect(json_response["summary"]).to include(
+          "total_revenue" => 96.5,
+          "highest_sale" => 96.5,
+          "total_points_generated" => 100
         )
       end
     end
@@ -131,7 +158,8 @@ RSpec.describe "Api::V1::Reports", type: :request do
         expect(sheet_xml).to include("Data")
         expect(sheet_xml).to include("Cliente")
         expect(sheet_xml).to include("Colaborador")
-        expect(sheet_xml).to include("Valor Total")
+        expect(sheet_xml).to include("Pagamento")
+        expect(sheet_xml).to include("Valor Cobrado")
         expect(sheet_xml).to include("Pontos Gerados")
       end
 
@@ -140,6 +168,7 @@ RSpec.describe "Api::V1::Reports", type: :request do
 
         expect(sheet_xml).to include(customer.name)
         expect(sheet_xml).to include(admin.name)
+        expect(sheet_xml).to include("Pix")
         expect(sheet_xml).to include("100")
       end
     end

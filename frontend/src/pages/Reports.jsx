@@ -7,6 +7,8 @@ import ReportsTable from "../components/reports/ReportsTable";
 import CustomerReport from "../components/reports/CustomerReport";
 import PointsReport from "../components/reports/PointsReport";
 import MovementsReport from "../components/reports/MovementsReport";
+import PaymentMethodsSummary from "../components/sales/PaymentMethodsSummary";
+import { summarizeByPaymentMethod } from "../utils/payment";
 
 const REPORT_TABS = [
   { id: "sales", label: "Vendas" },
@@ -465,6 +467,13 @@ export default function Reports() {
           {activeTab === "sales" && (
             <>
               <ReportSummary summary={salesReport.summary} />
+              <PaymentMethodsSummary
+                data={
+                  salesReport.summary.by_payment_method ||
+                  summarizeByPaymentMethod(salesReport.sales)
+                }
+                description="Valor cobrado em cada meio de pagamento no período."
+              />
               <ReportsTable sales={salesReport.sales} />
             </>
           )}

@@ -8,7 +8,7 @@ class Api::V1::ReportsController < ApplicationController
     sales = filtered_sales
 
     total_sales = sales.count
-    total_revenue = sales.sum(:total_amount).to_f
+    total_revenue = sales.sum(Arel.sql(Sale::CHARGED_AMOUNT_SQL)).to_f
     total_points_generated = sales.sum(:points_earned)
 
     average_ticket =
@@ -19,7 +19,7 @@ class Api::V1::ReportsController < ApplicationController
       end
 
     customers_count = sales.distinct.count(:customer_id)
-    highest_sale = sales.maximum(:total_amount).to_f
+    highest_sale = sales.maximum(Arel.sql(Sale::CHARGED_AMOUNT_SQL)).to_f
 
     average_points_per_sale =
       if total_sales.positive?
@@ -43,11 +43,19 @@ class Api::V1::ReportsController < ApplicationController
         total_points_generated: total_points_generated,
         customers_count: customers_count,
         highest_sale: highest_sale,
-        average_points_per_sale: average_points_per_sale.round(2)
+        average_points_per_sale: average_points_per_sale.round(2),
+        by_payment_method: payment_method_breakdown(sales)
       },
 
       sales: sales.order(created_at: :desc).as_json(
-        only: [:id, :total_amount, :points_earned, :created_at],
+        only: [
+          :id,
+          :total_amount,
+          :final_amount,
+          :payment_method,
+          :points_earned,
+          :created_at
+        ],
         include: {
           customer: { only: [:id, :name] },
           user: { only: [:id, :name] }
@@ -96,7 +104,7 @@ class Api::V1::ReportsController < ApplicationController
     active_customers = customers.where(status: :active).count
     inactive_customers = customers.where(status: :inactive).count
 
-    total_revenue = sales.sum(:total_amount).to_f
+    total_revenue = sales.sum(Arel.sql(Sale::CHARGED_AMOUNT_SQL)).to_f
     total_sales = sales.count
     customers_with_sales = sales.distinct.count(:customer_id)
 
@@ -112,7 +120,7 @@ class Api::V1::ReportsController < ApplicationController
                   .select(
                     "customer_id",
                     "COUNT(*) AS purchase_count",
-                    "SUM(total_amount) AS total_spent",
+                    "SUM(#{Sale::CHARGED_AMOUNT_SQL}) AS total_spent",
                     "MAX(created_at) AS last_purchase"
                   )
 
@@ -187,7 +195,8 @@ class Api::V1::ReportsController < ApplicationController
         "Data",
         "Cliente",
         "Colaborador",
-        "Valor Total",
+        "Pagamento",
+        "Valor Cobrado",
         "Pontos Gerados"
       ], style: excel_header_style(workbook)
 
@@ -197,14 +206,16 @@ class Api::V1::ReportsController < ApplicationController
           sale.created_at.strftime("%d/%m/%Y %H:%M"),
           sale.customer&.name,
           sale.user&.name,
-          sale.total_amount.to_f,
+          sale.payment_method_label,
+          sale.charged_amount,
           sale.points_earned
-                ], style: [
+        ], style: [
           excel_center_style(workbook),          # ID Venda
           excel_center_style(workbook),          # Data
           excel_text_style(workbook),            # Cliente
           excel_text_style(workbook),            # Colaborador
-          excel_currency_center_style(workbook), # Valor Total
+          excel_center_style(workbook),          # Pagamento
+          excel_currency_center_style(workbook), # Valor Cobrado
           excel_center_style(workbook)           # Pontos Gerados
         ]
       end
@@ -212,8 +223,8 @@ class Api::V1::ReportsController < ApplicationController
       format_excel_sheet(
         sheet,
         5,
-        "F",
-        [12, 20, 30, 28, 18, 18]
+        "G",
+        [12, 20, 30, 28, 16, 18, 18]
       )
     end
 
@@ -226,7 +237,7 @@ class Api::V1::ReportsController < ApplicationController
     customers = filtered_customers_for_export
     sales = filtered_sales_for_customers_export
 
-    total_revenue = sales.sum(:total_amount).to_f
+    total_revenue = sales.sum(Arel.sql(Sale::CHARGED_AMOUNT_SQL)).to_f
     total_sales = sales.count
 
     average_ticket =
@@ -241,7 +252,7 @@ class Api::V1::ReportsController < ApplicationController
                   .select(
                     "customer_id",
                     "COUNT(*) AS purchase_count",
-                    "SUM(total_amount) AS total_spent",
+                    "SUM(#{Sale::CHARGED_AMOUNT_SQL}) AS total_spent",
                     "MAX(created_at) AS last_purchase"
                   )
 
@@ -558,7 +569,7 @@ class Api::V1::ReportsController < ApplicationController
           type_label,
           transaction.points,
           transaction.balance_after,
-          transaction.sale&.total_amount&.to_f,
+          transaction.sale&.charged_amount,
           transaction.description,
           transaction.user&.name
         ], style: [
@@ -760,7 +771,7 @@ class Api::V1::ReportsController < ApplicationController
           description: tx.description,
           points: tx.points,
           balance_after: tx.balance_after,
-          sale_amount: tx.sale&.total_amount&.to_f,
+          sale_amount: tx.sale&.charged_amount,
           user: tx.user&.name
         }
       end
@@ -768,6 +779,24 @@ class Api::V1::ReportsController < ApplicationController
   end
 
   private
+
+  # Quantidade de vendas e valor cobrado por forma de pagamento
+  def payment_method_breakdown(sales)
+    sales.unscope(:includes, :order)
+         .group(:payment_method)
+         .pluck(
+           :payment_method,
+           Arel.sql("COUNT(sales.id)"),
+           Arel.sql("SUM(#{Sale::CHARGED_AMOUNT_SQL})")
+         )
+         .map do |payment_method, sales_count, total|
+      {
+        payment_method: payment_method,
+        sales_count: sales_count,
+        total: total.to_f
+      }
+    end.sort_by { |item| -item[:total] }
+  end
 
   def filtered_sales
     sales = current_store.sales.includes(:customer, :user)

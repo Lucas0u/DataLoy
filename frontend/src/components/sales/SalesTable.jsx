@@ -1,4 +1,6 @@
 import { Eye, ShoppingCart } from "lucide-react";
+import PaymentMethodBadge from "./PaymentMethodBadge";
+import { getChargedAmount } from "../../utils/payment";
 
 export default function SalesTable({ sales = [], onView }) {
   function formatCurrency(value) {
@@ -21,7 +23,7 @@ export default function SalesTable({ sales = [], onView }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px]">
+        <table className="w-full min-w-[880px]">
           <thead className="border-b border-slate-200 bg-slate-50">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -36,8 +38,12 @@ export default function SalesTable({ sales = [], onView }) {
                 Itens
               </th>
 
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Pagamento
+              </th>
+
               <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Valor
+                Valor cobrado
               </th>
 
               <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -53,7 +59,7 @@ export default function SalesTable({ sales = [], onView }) {
           <tbody className="divide-y divide-slate-100">
             {sales.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-16">
+                <td colSpan="7" className="px-6 py-16">
                   <div className="flex flex-col items-center justify-center text-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
                       <ShoppingCart size={24} />
@@ -95,8 +101,12 @@ export default function SalesTable({ sales = [], onView }) {
                     {sale.sale_items?.length || 0}
                   </td>
 
+                  <td className="px-6 py-4">
+                    <PaymentMethodBadge method={sale.payment_method} />
+                  </td>
+
                   <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800">
-                    {formatCurrency(sale.total_amount)}
+                    {formatCurrency(getChargedAmount(sale))}
                   </td>
 
                   <td className="px-6 py-4 text-right">

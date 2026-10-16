@@ -23,7 +23,14 @@ class Api::V1::SalesController < ApplicationController
 
     render json: {
       data: sales.as_json(
-        only: [:id, :total_amount, :points_earned, :created_at],
+        only: [
+          :id,
+          :total_amount,
+          :final_amount,
+          :payment_method,
+          :points_earned,
+          :created_at
+        ],
         include: {
           customer: { only: [:id, :name] },
           user: { only: [:id, :name] },
@@ -53,6 +60,9 @@ class Api::V1::SalesController < ApplicationController
   # {
   #   "sale": {
   #     "customer_id": 1,
+  #     "payment_method": "pix" | "dinheiro" | "cartao",
+  #     "final_amount": 96.5,          # obrigatório no cartão (valor da maquininha)
+  #     "card_fee_percentage": 3.5,    # opcional, só no cartão
   #     "sale_items": [
   #       {
   #         "product_name": "X",
@@ -72,6 +82,28 @@ class Api::V1::SalesController < ApplicationController
       }, status: :unprocessable_entity
     end
 
+    items_error = validate_items(items)
+
+    if items_error
+      return render json: { error: items_error }, status: :unprocessable_entity
+    end
+
+    payment_method = sale_params[:payment_method].to_s
+
+    unless Sale::PAYMENT_METHODS.include?(payment_method)
+      return render json: {
+        error: "Selecione uma forma de pagamento válida (Pix, dinheiro ou cartão)"
+      }, status: :unprocessable_entity
+    end
+
+    card = payment_method == "cartao"
+
+    if card && sale_params[:final_amount].blank?
+      return render json: {
+        error: "Informe o valor cobrado na maquininha"
+      }, status: :unprocessable_entity
+    end
+
     rule = current_store.loyalty_rules
                          .where(active: true)
                          .order(active_from: :desc)
@@ -87,7 +119,22 @@ class Api::V1::SalesController < ApplicationController
       item[:quantity].to_i * item[:unit_price].to_f
     end
 
+    if total_amount > Sale::MAX_AMOUNT
+      return render json: {
+        error: "O total da venda não pode passar de R$ 1.000.000,00"
+      }, status: :unprocessable_entity
+    end
+
+    # Os pontos continuam sendo calculados sobre o valor dos produtos
     points_earned = (total_amount * rule.points_per_currency_unit).floor
+
+    # Valor cobrado: no cartão vem da maquininha; nos demais é o próprio total
+    final_amount = card ? sale_params[:final_amount].to_d : total_amount
+
+    card_fee_percentage =
+      if card && sale_params[:card_fee_percentage].present?
+        sale_params[:card_fee_percentage].to_d
+      end
 
     sale = nil
 
@@ -96,6 +143,9 @@ class Api::V1::SalesController < ApplicationController
         customer: customer,
         user: current_user,
         total_amount: total_amount,
+        final_amount: final_amount,
+        payment_method: payment_method,
+        card_fee_percentage: card_fee_percentage,
         points_earned: points_earned
       )
 
@@ -150,9 +200,29 @@ class Api::V1::SalesController < ApplicationController
     }, status: :not_found
   end
 
+  def validate_items(items)
+    items.each do |item|
+      quantity = item[:quantity].to_i
+      unit_price = item[:unit_price].to_f
+
+      if item[:product_name].blank? || quantity <= 0 || unit_price.negative?
+        return "Preencha corretamente todos os produtos da venda"
+      end
+
+      if quantity > Sale::MAX_AMOUNT || unit_price > Sale::MAX_AMOUNT
+        return "Quantidade e preço não podem passar de 1.000.000"
+      end
+    end
+
+    nil
+  end
+
   def sale_params
     params.require(:sale).permit(
       :customer_id,
+      :payment_method,
+      :final_amount,
+      :card_fee_percentage,
       sale_items: [
         :product_name,
         :quantity,

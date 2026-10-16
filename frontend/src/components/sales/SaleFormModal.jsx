@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Calculator, Plus, Trash2, X } from "lucide-react";
 import api from "../../services/api";
+import { MAX_AMOUNT, PAYMENT_METHODS, limitAmount } from "../../utils/payment";
 
 export default function SaleFormModal({ onClose, onSuccess }) {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
+
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [cardFeePercentage, setCardFeePercentage] = useState("");
+  const [finalAmount, setFinalAmount] = useState("");
+  const [showFeeCalculator, setShowFeeCalculator] = useState(false);
 
   const [items, setItems] = useState([
     {
@@ -40,6 +46,10 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   }, []);
 
   function handleItemChange(index, field, value) {
+    if (field === "quantity" || field === "unit_price") {
+      value = limitAmount(value);
+    }
+
     setItems((currentItems) =>
       currentItems.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item
@@ -80,6 +90,39 @@ export default function SaleFormModal({ onClose, onSuccess }) {
     }).format(Number(value) || 0);
   }
 
+  function handlePaymentMethodChange(method) {
+    setPaymentMethod(method);
+
+    // Os campos de taxa e valor final só existem para cartão
+    if (method !== "cartao") {
+      setCardFeePercentage("");
+      setFinalAmount("");
+      setShowFeeCalculator(false);
+    }
+  }
+
+  function hideFeeCalculator() {
+    setShowFeeCalculator(false);
+    setCardFeePercentage("");
+  }
+
+  // Valor final = valor antes - (valor antes × taxa / 100)
+  function calculateFinalAmount() {
+    setError("");
+
+    const fee = Number(cardFeePercentage);
+
+    if (cardFeePercentage === "" || fee < 0 || fee > 100) {
+      setError("Informe uma taxa do cartão entre 0% e 100%.");
+      return;
+    }
+
+    const valueBefore = calculateTotal();
+    const result = valueBefore - (valueBefore * fee) / 100;
+
+    setFinalAmount((Math.round(result * 100) / 100).toFixed(2));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -102,12 +145,53 @@ export default function SaleFormModal({ onClose, onSuccess }) {
       return;
     }
 
+    const limitFormatted = MAX_AMOUNT.toLocaleString("pt-BR");
+
+    const overLimitItem = items.some(
+      (item) =>
+        Number(item.quantity) > MAX_AMOUNT ||
+        Number(item.unit_price) > MAX_AMOUNT
+    );
+
+    if (overLimitItem) {
+      setError(`Quantidade e preço não podem passar de ${limitFormatted}.`);
+      return;
+    }
+
+    if (calculateTotal() > MAX_AMOUNT) {
+      setError(`O total da venda não pode passar de R$ ${limitFormatted},00.`);
+      return;
+    }
+
+    if (!paymentMethod) {
+      setError("Selecione a forma de pagamento.");
+      return;
+    }
+
+    const isCard = paymentMethod === "cartao";
+
+    if (isCard && (finalAmount === "" || Number(finalAmount) < 0)) {
+      setError("Informe o valor cobrado na maquininha.");
+      return;
+    }
+
+    if (isCard && Number(finalAmount) > MAX_AMOUNT) {
+      setError(`O valor cobrado não pode passar de R$ ${limitFormatted},00.`);
+      return;
+    }
+
     try {
       setSaving(true);
 
       await api.post("/api/v1/sales", {
         sale: {
           customer_id: Number(customerId),
+          payment_method: paymentMethod,
+          card_fee_percentage:
+            isCard && showFeeCalculator && cardFeePercentage !== ""
+              ? Number(cardFeePercentage)
+              : null,
+          final_amount: isCard ? Number(finalAmount) : null,
           sale_items: items.map((item) => ({
             product_name: item.product_name.trim(),
             quantity: Number(item.quantity),
@@ -128,7 +212,11 @@ export default function SaleFormModal({ onClose, onSuccess }) {
     }
   }
 
-  const total = calculateTotal();
+  const itemsTotal = calculateTotal();
+
+  // No cartão, o total da compra passa a ser o valor cobrado na maquininha
+  const usesChargedAmount = paymentMethod === "cartao" && finalAmount !== "";
+  const total = usesChargedAmount ? Number(finalAmount) : itemsTotal;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -260,6 +348,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                         <input
                           type="number"
                           min="1"
+                          max={MAX_AMOUNT}
                           value={item.quantity}
                           onChange={(event) =>
                             handleItemChange(
@@ -283,6 +372,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                         <input
                           type="number"
                           min="0"
+                          max={MAX_AMOUNT}
                           step="0.01"
                           value={item.unit_price}
                           onChange={(event) =>
@@ -317,6 +407,135 @@ export default function SaleFormModal({ onClose, onSuccess }) {
               </div>
             </div>
 
+            {/* Forma de pagamento */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Forma de pagamento
+              </h3>
+
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => {
+                  const selected = paymentMethod === value;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => handlePaymentMethodChange(value)}
+                      disabled={saving}
+                      aria-pressed={selected}
+                      className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        selected
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-4 ring-indigo-500/10"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white"
+                      }`}
+                    >
+                      <Icon size={20} />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Campos exclusivos do cartão */}
+              {paymentMethod === "cartao" && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  {/* Opção principal: valor retornado pela maquininha */}
+                  <label
+                    htmlFor="final-amount"
+                    className="mb-1.5 block text-xs font-medium text-slate-500"
+                  >
+                    Valor cobrado (maquininha)
+                  </label>
+
+                  <input
+                    id="final-amount"
+                    type="number"
+                    min="0"
+                    max={MAX_AMOUNT}
+                    step="0.01"
+                    value={finalAmount}
+                    onChange={(event) =>
+                      setFinalAmount(limitAmount(event.target.value))
+                    }
+                    placeholder="Digite o valor que a maquininha retornou"
+                    disabled={saving}
+                    required
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                  />
+
+                  {/* Opção secundária: calcular pela taxa */}
+                  {!showFeeCalculator ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowFeeCalculator(true)}
+                      disabled={saving}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Calculator size={14} />
+                      Calcular pela taxa
+                    </button>
+                  ) : (
+                    <div className="mt-4 border-t border-slate-200 pt-4">
+                      <div className="grid gap-3 sm:grid-cols-[160px_auto_auto] sm:items-end">
+                        <div>
+                          <label
+                            htmlFor="card-fee"
+                            className="mb-1.5 block text-xs font-medium text-slate-500"
+                          >
+                            Taxa do cartão (%)
+                          </label>
+
+                          <input
+                            id="card-fee"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={cardFeePercentage}
+                            onChange={(event) =>
+                              setCardFeePercentage(
+                                Number(event.target.value) > 100
+                                  ? "100"
+                                  : event.target.value
+                              )
+                            }
+                            placeholder="Ex.: 3,5"
+                            disabled={saving}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={calculateFinalAmount}
+                          disabled={saving}
+                          className="inline-flex h-[42px] items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Calculator size={16} />
+                          Calcular
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={hideFeeCalculator}
+                          disabled={saving}
+                          className="inline-flex h-[42px] items-center justify-center rounded-lg px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Ocultar
+                        </button>
+                      </div>
+
+                      <p className="mt-3 text-xs text-slate-500">
+                        {formatCurrency(itemsTotal)} − taxa% = valor cobrado. O
+                        resultado vai para o campo acima.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Total */}
             <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-violet-50 p-5">
               <div>
@@ -325,7 +544,11 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                 </p>
 
                 <p className="mt-1 text-xs text-slate-400">
-                  Os pontos serão calculados automaticamente.
+                  {usesChargedAmount
+                    ? `Valor cobrado no cartão · produtos: ${formatCurrency(
+                        itemsTotal
+                      )}`
+                    : "Os pontos serão calculados automaticamente."}
                 </p>
               </div>
 

@@ -13,6 +13,7 @@ import TopCustomers from "../components/dashboard/TopCustomers";
 import CustomersChart from "../components/dashboard/CustomersChart";
 import MetricCard from "../components/dashboard/MetricCard";
 import SalesChart from "../components/dashboard/SalesChart";
+import PaymentMethodsSummary from "../components/sales/PaymentMethodsSummary";
 import api from "../services/api";
 
 export default function Dashboard() {
@@ -140,6 +141,11 @@ export default function Dashboard() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <TopRewards data={dashboard?.most_redeemed_rewards || []} />
+
+        {/* Espera do backend: [{ payment_method, sales_count, total }] */}
+        <PaymentMethodsSummary
+          data={dashboard?.sales_by_payment_method || []}
+        />
       </div>
     </div>
   );
