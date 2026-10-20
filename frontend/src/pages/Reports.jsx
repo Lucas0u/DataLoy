@@ -9,6 +9,8 @@ import PointsReport from "../components/reports/PointsReport";
 import MovementsReport from "../components/reports/MovementsReport";
 import PaymentMethodsSummary from "../components/sales/PaymentMethodsSummary";
 import { summarizeByPaymentMethod } from "../utils/payment";
+import { buildSalesReportPdf } from "../utils/salesReportPdf";
+import { useAuth } from "../contexts/AuthContext";
 
 const REPORT_TABS = [
   { id: "sales", label: "Vendas" },
@@ -34,6 +36,7 @@ function formatDate(value) {
 }
 
 export default function Reports() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("sales");
 
   const [filters, setFilters] = useState(initialFilters);
@@ -89,6 +92,7 @@ export default function Reports() {
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState("");
 
   async function loadCustomers() {
@@ -347,6 +351,62 @@ export default function Reports() {
     }
   }
 
+  // Gera o PDF das vendas do período filtrado e abre para imprimir/salvar
+  async function handlePrint() {
+    // A janela é aberta já no clique para o navegador não bloquear o pop-up
+    const printWindow = window.open("", "_blank");
+
+    if (printWindow) {
+      printWindow.document.title = "Gerando relatório...";
+      printWindow.document.body.innerHTML =
+        '<p style="font-family:sans-serif;padding:24px;color:#475569">Gerando relatório em PDF...</p>';
+    }
+
+    try {
+      setPrinting(true);
+      setError("");
+
+      // Busca sempre as vendas do período aplicado, mesmo em outra aba
+      const response = await api.get("/api/v1/reports", {
+        params: buildParams(appliedFilters),
+      });
+
+      const selectedCustomerName = customers.find(
+        (customer) => String(customer.id) === String(appliedFilters.customer_id)
+      )?.name;
+
+      const doc = buildSalesReportPdf({
+        sales: response.data.sales || [],
+        summary: response.data.summary || {},
+        periodLabel: getPeriodLabel(),
+        customerName: selectedCustomerName,
+        generatedBy: user?.name,
+      });
+
+      const filename = `relatorio_vendas_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+
+      if (printWindow) {
+        doc.autoPrint();
+        const url = doc.output("bloburl", { filename });
+        printWindow.location.href = url;
+      } else {
+        // Pop-up bloqueado: baixa o arquivo
+        doc.save(filename);
+      }
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err);
+      printWindow?.close();
+      setError(
+        err.response?.data?.error ||
+          "Não foi possível gerar o PDF do relatório."
+      );
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   return (
     <div className="mt-6 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -368,7 +428,7 @@ export default function Reports() {
         <button
           type="button"
           onClick={() => loadActiveReport(appliedFilters)}
-          disabled={loading || exporting}
+          disabled={loading || exporting || printing}
           className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
@@ -401,7 +461,8 @@ export default function Reports() {
         onApply={handleApply}
         onClear={handleClear}
         onExport={handleExport}
-        loading={loading || exporting}
+        onPrint={handlePrint}
+        loading={loading || exporting || printing}
         showStatus={filterConfig.showStatus}
         showTransactionType={filterConfig.showTransactionType}
       />

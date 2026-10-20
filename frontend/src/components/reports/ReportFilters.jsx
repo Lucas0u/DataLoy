@@ -2,6 +2,7 @@ import {
   CalendarDays,
   Download,
   Filter,
+  Printer,
   RotateCcw,
   UserRound,
   Users,
@@ -23,6 +24,7 @@ export default function ReportFilters({
   onApply,
   onClear,
   onExport,
+  onPrint,
   loading = false,
   showStatus = false,
   showTransactionType = false,
@@ -233,7 +235,7 @@ export default function ReportFilters({
         </div>
 
         {/* Exportação */}
-        {onExport && (
+        {(onExport || onPrint) && (
           <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">
@@ -241,20 +243,37 @@ export default function ReportFilters({
               </p>
 
               <p className="mt-0.5 text-xs text-slate-400">
-                O arquivo utilizará os filtros atualmente aplicados.
+                Os arquivos utilizarão as vendas do período e filtros aplicados.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={onExport}
-              disabled={loading}
-              className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Download size={17} />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {onPrint && (
+                <button
+                  type="button"
+                  onClick={onPrint}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Printer size={17} />
 
-              {loading ? "Preparando..." : "Exportar Excel"}
-            </button>
+                  {loading ? "Preparando..." : "Imprimir / PDF"}
+                </button>
+              )}
+
+              {onExport && (
+                <button
+                  type="button"
+                  onClick={onExport}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download size={17} />
+
+                  {loading ? "Preparando..." : "Exportar Excel"}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
