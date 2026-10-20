@@ -103,6 +103,10 @@ export function buildSalesReportPdf({
     (total, sale) => total + getChargedAmount(sale),
     0
   );
+  const totalDiscounts = sales.reduce(
+    (total, sale) => total + (Number(sale.discount_amount) || 0),
+    0
+  );
   const totalPoints = sales.reduce(
     (total, sale) => total + (Number(sale.points_earned) || 0),
     0
@@ -210,6 +214,7 @@ export function buildSalesReportPdf({
         "Cliente",
         "Colaborador",
         "Pagamento",
+        "Desconto",
         "Valor cobrado",
         "Pontos",
       ],
@@ -221,6 +226,9 @@ export function buildSalesReportPdf({
           sale.customer?.name || "Cliente não informado",
           sale.user?.name || "Não informado",
           getPaymentMethod(sale.payment_method).label,
+          Number(sale.discount_amount) > 0
+            ? `-${formatCurrency(sale.discount_amount)}`
+            : "-",
           formatCurrency(getChargedAmount(sale)),
           `${formatNumber(sale.points_earned)} pts`,
         ])
@@ -228,7 +236,7 @@ export function buildSalesReportPdf({
           [
             {
               content: "Nenhuma venda encontrada no período.",
-              colSpan: 7,
+              colSpan: 8,
               styles: { halign: "center", textColor: COLORS.muted },
             },
           ],
@@ -241,6 +249,7 @@ export function buildSalesReportPdf({
               colSpan: 5,
               styles: { halign: "right" },
             },
+            totalDiscounts > 0 ? `-${formatCurrency(totalDiscounts)}` : "-",
             formatCurrency(totalCharged),
             `${formatNumber(totalPoints)} pts`,
           ],
@@ -258,11 +267,12 @@ export function buildSalesReportPdf({
     columnStyles: {
       0: { cellWidth: 18 },
       1: { cellWidth: 34 },
-      4: { cellWidth: 30 },
-      5: { halign: "right", cellWidth: 34 },
-      6: { halign: "right", cellWidth: 26 },
+      4: { cellWidth: 26 },
+      5: { halign: "right", cellWidth: 28 },
+      6: { halign: "right", cellWidth: 32 },
+      7: { halign: "right", cellWidth: 24 },
     },
-    didParseCell: alignHeaders({ 5: "right", 6: "right" }),
+    didParseCell: alignHeaders({ 5: "right", 6: "right", 7: "right" }),
   });
 
   // Rodapé com numeração em todas as páginas

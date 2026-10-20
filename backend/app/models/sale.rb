@@ -10,6 +10,9 @@ class Sale < ApplicationRecord
   belongs_to :customer
   belongs_to :user
 
+  # Cupom de recompensa utilizado nesta venda (no máximo um)
+  belongs_to :reward_redemption, optional: true
+
   has_many :sale_items, dependent: :destroy
   has_many :points_transactions
 
@@ -32,6 +35,8 @@ class Sale < ApplicationRecord
             },
             allow_nil: true
   validates :final_amount, presence: true, if: :card?
+
+  validates :discount_amount, numericality: { greater_than_or_equal_to: 0 }
 
   validates :card_fee_percentage,
             numericality: {

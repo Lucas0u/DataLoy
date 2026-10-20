@@ -193,6 +193,105 @@ RSpec.describe "Api::V1::Sales", type: :request do
       end
     end
 
+    context "com cupom de recompensa" do
+      let(:reward) { create(:reward, store: store) }
+      let(:coupon) do
+        create(:reward_redemption, store: store, customer: customer, reward: reward,
+                                   discount_type: "fixed", discount_value: 20)
+      end
+
+      def coupon_params(coupon_id)
+        sale_params.deep_merge(sale: { coupon_id: coupon_id })
+      end
+
+      it "aplica o desconto e marca o cupom como utilizado" do
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+
+        sale = Sale.last
+
+        expect(sale.total_amount).to eq(100.0)
+        expect(sale.discount_amount).to eq(20.0)
+        expect(sale.final_amount).to eq(80.0)
+        expect(sale.reward_redemption).to eq(coupon)
+        expect(coupon.reload).to be_used
+        expect(coupon.used_at).to be_present
+      end
+
+      it "calcula os pontos sobre o valor com desconto" do
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        expect(Sale.last.points_earned).to eq(80)
+        expect(customer.reload.points_balance).to eq(80)
+      end
+
+      it "aplica desconto em porcentagem" do
+        coupon.update!(discount_type: "percentage", discount_value: 15)
+
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        expect(Sale.last.discount_amount).to eq(15.0)
+        expect(Sale.last.points_earned).to eq(85)
+      end
+
+      it "no cartão usa o valor da maquininha e aplica o cupom nos pontos" do
+        params = coupon_params(coupon.id).deep_merge(
+          sale: { payment_method: "cartao", final_amount: 77.2 }
+        )
+
+        post "/api/v1/sales", params: params, headers: auth_headers(admin)
+
+        sale = Sale.last
+
+        expect(sale.discount_amount).to eq(20.0)
+        expect(sale.final_amount).to eq(77.2)
+        expect(sale.points_earned).to eq(80)
+      end
+
+      it "não permite usar o mesmo cupom duas vezes" do
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        expect {
+          post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+        }.not_to change(Sale, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(json_response["error"]).to include("já foi utilizado")
+      end
+
+      it "não permite usar cupom vencido" do
+        coupon.update!(expires_at: 1.day.ago)
+
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(coupon.reload).to be_available
+      end
+
+      it "não permite usar cupom de outro cliente" do
+        other_coupon = create(:reward_redemption, store: store, reward: reward,
+                                                  customer: create(:customer, store: store))
+
+        post "/api/v1/sales", params: coupon_params(other_coupon.id), headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(json_response["error"]).to include("Cupom não encontrado")
+        expect(other_coupon.reload).to be_available
+      end
+
+      it "retorna o cupom e o desconto na listagem de vendas" do
+        post "/api/v1/sales", params: coupon_params(coupon.id), headers: auth_headers(admin)
+
+        get "/api/v1/sales", headers: auth_headers(admin)
+
+        sale_json = json_response["data"].first
+
+        expect(sale_json["discount_amount"]).to eq("20.0")
+        expect(sale_json["reward_redemption"]["code"]).to eq(coupon.code)
+      end
+    end
+
     context "quando a forma de pagamento é inválida" do
       it "retorna status 422 sem forma de pagamento" do
         post "/api/v1/sales",

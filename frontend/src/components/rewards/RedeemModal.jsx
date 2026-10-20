@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Search, X } from "lucide-react";
+import { CheckCircle2, Search, Ticket, X } from "lucide-react";
 import api from "../../services/api";
+import { formatDate, formatDiscount } from "../../utils/coupon";
 
 export default function RedeemModal({ reward, onClose, onRedeemed }) {
   const [query, setQuery] = useState("");
@@ -9,6 +10,16 @@ export default function RedeemModal({ reward, onClose, onRedeemed }) {
   const [searching, setSearching] = useState(false);
   const [redeeming, setRedeeming] = useState(false);
   const [error, setError] = useState("");
+  const [coupon, setCoupon] = useState(null);
+
+  // Depois do resgate, fechar a janela atualiza a lista (estoque)
+  function handleClose() {
+    if (coupon) {
+      onRedeemed();
+    } else {
+      onClose();
+    }
+  }
 
   async function handleSearch(event) {
     const value = event.target.value;
@@ -40,10 +51,10 @@ export default function RedeemModal({ reward, onClose, onRedeemed }) {
     setError("");
     setRedeeming(true);
     try {
-      await api.post(`/api/v1/rewards/${reward.id}/redeem`, {
+      const response = await api.post(`/api/v1/rewards/${reward.id}/redeem`, {
         customer_id: selectedCustomer.id,
       });
-      onRedeemed();
+      setCoupon(response.data);
     } catch (err) {
       setError(
         err.response?.data?.error || "Não foi possível realizar o resgate."
@@ -56,6 +67,57 @@ export default function RedeemModal({ reward, onClose, onRedeemed }) {
   const insufficientPoints =
     selectedCustomer &&
     selectedCustomer.points_balance < reward.points_required;
+
+  if (coupon) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+            <CheckCircle2 size={26} />
+          </div>
+
+          <h2 className="mt-3 text-lg font-semibold text-slate-900">
+            Resgate realizado
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            O cupom já está disponível para {coupon.customer?.name} usar na
+            próxima compra.
+          </p>
+
+          <div className="mt-5 rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50 p-4">
+            <p className="flex items-center justify-center gap-1.5 text-xs font-medium uppercase tracking-wide text-indigo-500">
+              <Ticket size={14} />
+              Cupom
+            </p>
+            <p className="mt-1 font-mono text-2xl font-bold tracking-wider text-indigo-700">
+              {coupon.code}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              {formatDiscount(coupon.discount_type, coupon.discount_value)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {coupon.expires_at
+                ? `Válido até ${formatDate(coupon.expires_at)}`
+                : "Sem vencimento"}
+            </p>
+          </div>
+
+          <p className="mt-4 text-xs text-slate-500">
+            {coupon.points_used} pontos utilizados · saldo restante:{" "}
+            {coupon.points_balance} pontos
+          </p>
+
+          <button
+            type="button"
+            onClick={handleClose}
+            className="mt-5 w-full rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 py-2.5 text-sm font-semibold text-white shadow-sm"
+          >
+            Concluir
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
@@ -77,7 +139,10 @@ export default function RedeemModal({ reward, onClose, onRedeemed }) {
         <div className="mt-3 rounded-xl bg-slate-50 p-3">
           <p className="text-sm font-semibold text-slate-800">{reward.name}</p>
           <p className="text-xs text-slate-500">
-            {reward.points_required} pontos necessários
+            {reward.points_required} pontos necessários · cupom de{" "}
+            {formatDiscount(reward.discount_type, reward.discount_value, {
+              suffix: false,
+            })}
           </p>
         </div>
 

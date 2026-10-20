@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import api from "../../services/api";
+import { DISCOUNT_TYPES, formatDiscount } from "../../utils/coupon";
+import { MAX_AMOUNT } from "../../utils/payment";
 
 export default function RewardFormModal({ reward, onClose, onSaved }) {
   const isEditing = Boolean(reward);
@@ -11,6 +13,9 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
     points_required: "",
     valid_until: "",
     quantity_available: "",
+    discount_type: "fixed",
+    discount_value: "",
+    coupon_validity_days: "",
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -24,6 +29,13 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
         valid_until: reward.valid_until || "",
         quantity_available:
           reward.quantity_available === null ? "" : reward.quantity_available,
+        discount_type: reward.discount_type || "fixed",
+        discount_value:
+          reward.discount_value === null ? "" : reward.discount_value,
+        coupon_validity_days:
+          reward.coupon_validity_days === null
+            ? ""
+            : reward.coupon_validity_days,
       });
     }
   }, [reward]);
@@ -35,6 +47,24 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+
+    const discountValue = Number(form.discount_value);
+    const maxDiscount = form.discount_type === "percentage" ? 100 : MAX_AMOUNT;
+
+    if (form.discount_value === "" || discountValue <= 0) {
+      setError("Informe o valor do desconto do cupom.");
+      return;
+    }
+
+    if (discountValue > maxDiscount) {
+      setError(
+        form.discount_type === "percentage"
+          ? "O desconto não pode passar de 100%."
+          : "O desconto não pode passar de R$ 1.000.000,00."
+      );
+      return;
+    }
+
     setSaving(true);
 
     const payload = {
@@ -45,6 +75,10 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
         valid_until: form.valid_until || null,
         quantity_available:
           form.quantity_available === "" ? null : form.quantity_available,
+        discount_type: form.discount_type,
+        discount_value: form.discount_value,
+        coupon_validity_days:
+          form.coupon_validity_days === "" ? null : form.coupon_validity_days,
       },
     };
 
@@ -69,7 +103,7 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">
             {isEditing ? "Editar recompensa" : "Nova recompensa"}
@@ -116,6 +150,88 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
             />
           </div>
 
+          {/* Cupom gerado no resgate */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <p className="text-sm font-semibold text-slate-800">
+              Cupom de desconto
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Ao resgatar, o cliente recebe um cupom com este desconto para usar
+              numa próxima compra.
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {DISCOUNT_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => handleChange("discount_type", type.value)}
+                  aria-pressed={form.discount_type === type.value}
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                    form.discount_type === type.value
+                      ? "border-indigo-500 bg-white text-indigo-700 ring-4 ring-indigo-500/10"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  {form.discount_type === "percentage"
+                    ? "Desconto (%)"
+                    : "Desconto (R$)"}
+                </label>
+                <input
+                  type="number"
+                  min="0.01"
+                  max={form.discount_type === "percentage" ? 100 : MAX_AMOUNT}
+                  step="0.01"
+                  required
+                  value={form.discount_value}
+                  onChange={(e) =>
+                    handleChange("discount_value", e.target.value)
+                  }
+                  placeholder={
+                    form.discount_type === "percentage"
+                      ? "Ex.: 10"
+                      : "Ex.: 20,00"
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  Validade do cupom (dias)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.coupon_validity_days}
+                  onChange={(e) =>
+                    handleChange("coupon_validity_days", e.target.value)
+                  }
+                  placeholder="Vazio = não vence"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                />
+              </div>
+            </div>
+
+            {form.discount_value !== "" && (
+              <p className="mt-3 text-xs font-medium text-indigo-700">
+                {formatDiscount(form.discount_type, form.discount_value)}
+                {form.coupon_validity_days
+                  ? `, válido por ${form.coupon_validity_days} dia(s) após o resgate`
+                  : ", sem vencimento"}
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
@@ -151,7 +267,7 @@ export default function RewardFormModal({ reward, onClose, onSaved }) {
 
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-              Validade (opcional)
+              Disponível para resgate até (opcional)
             </label>
             <input
               type="date"

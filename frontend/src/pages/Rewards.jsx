@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { Gift, Plus } from "lucide-react";
 import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 import RewardCard from "../components/rewards/RewardCard";
 import RewardFormModal from "../components/rewards/RewardFormModal";
 import RedeemModal from "../components/rewards/RedeemModal";
 
 export default function Rewards() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -78,18 +82,26 @@ export default function Rewards() {
   return (
     <div className="mt-6 space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {rewards.length} recompensa(s) cadastrada(s)
-        </p>
+        <div>
+          <p className="text-sm text-slate-500">
+            {rewards.length} recompensa(s) cadastrada(s)
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Resgate em nome do cliente: os pontos viram um cupom de desconto
+            para a próxima compra.
+          </p>
+        </div>
 
-        <button
-          type="button"
-          onClick={handleNew}
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
-        >
-          <Plus size={18} />
-          Nova recompensa
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleNew}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+          >
+            <Plus size={18} />
+            Nova recompensa
+          </button>
+        )}
       </div>
 
       {error && (
@@ -114,12 +126,13 @@ export default function Rewards() {
               onEdit={handleEdit}
               onToggleActive={handleToggleActive}
               onRedeem={setRedeemingReward}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
       )}
 
-      {showForm && (
+      {showForm && isAdmin && (
         <RewardFormModal
           reward={editingReward}
           onClose={() => setShowForm(false)}

@@ -5,6 +5,8 @@ import {
   Users,
   TrendingUp,
   Trophy,
+  Ticket,
+  BadgePercent,
 } from "lucide-react";
 
 function formatCurrency(value) {
@@ -62,10 +64,24 @@ export default function ReportSummary({ summary = {} }) {
       icon: Trophy,
       iconClass: "bg-rose-50 text-rose-600",
     },
+    {
+      title: "Cupons utilizados",
+      value: formatNumber(summary.coupons_used),
+      description: "Vendas com cupom de recompensa",
+      icon: Ticket,
+      iconClass: "bg-teal-50 text-teal-600",
+    },
+    {
+      title: "Descontos em cupons",
+      value: formatCurrency(summary.total_discounts),
+      description: "Total abatido pelos cupons",
+      icon: BadgePercent,
+      iconClass: "bg-emerald-50 text-emerald-600",
+    },
   ];
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => {
         const Icon = card.icon;
 

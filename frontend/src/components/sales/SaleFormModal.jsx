@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { Calculator, Plus, Trash2, X } from "lucide-react";
+import { Calculator, Plus, Ticket, Trash2, X } from "lucide-react";
 import api from "../../services/api";
+import {
+  calculateCouponDiscount,
+  formatDate,
+  formatDiscount,
+} from "../../utils/coupon";
 import { MAX_AMOUNT, PAYMENT_METHODS, limitAmount } from "../../utils/payment";
 
 export default function SaleFormModal({ onClose, onSuccess }) {
@@ -11,6 +16,11 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   const [cardFeePercentage, setCardFeePercentage] = useState("");
   const [finalAmount, setFinalAmount] = useState("");
   const [showFeeCalculator, setShowFeeCalculator] = useState(false);
+
+  // Cupons de recompensa disponíveis do cliente selecionado
+  const [coupons, setCoupons] = useState([]);
+  const [couponId, setCouponId] = useState("");
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
 
   const [items, setItems] = useState([
     {
@@ -44,6 +54,40 @@ export default function SaleFormModal({ onClose, onSuccess }) {
 
     loadCustomers();
   }, []);
+
+  // Sempre que o cliente muda, busca os cupons que ele pode usar
+  useEffect(() => {
+    setCouponId("");
+    setCoupons([]);
+
+    if (!customerId) return;
+
+    let ignore = false;
+
+    async function loadCoupons() {
+      try {
+        setLoadingCoupons(true);
+
+        const response = await api.get(
+          `/api/v1/customers/${customerId}/coupons`,
+          { params: { status: "available" } }
+        );
+
+        if (!ignore) setCoupons(response.data || []);
+      } catch (error) {
+        console.error("Erro ao carregar cupons:", error);
+        if (!ignore) setCoupons([]);
+      } finally {
+        if (!ignore) setLoadingCoupons(false);
+      }
+    }
+
+    loadCoupons();
+
+    return () => {
+      ignore = true;
+    };
+  }, [customerId]);
 
   function handleItemChange(index, field, value) {
     if (field === "quantity" || field === "unit_price") {
@@ -83,6 +127,17 @@ export default function SaleFormModal({ onClose, onSuccess }) {
     }, 0);
   }
 
+  function getSelectedCoupon() {
+    return coupons.find((coupon) => String(coupon.id) === String(couponId));
+  }
+
+  // Valor a pagar = produtos − desconto do cupom
+  function calculateAmountDue() {
+    const subtotal = calculateTotal();
+
+    return subtotal - calculateCouponDiscount(getSelectedCoupon(), subtotal);
+  }
+
   function formatCurrency(value) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -117,7 +172,8 @@ export default function SaleFormModal({ onClose, onSuccess }) {
       return;
     }
 
-    const valueBefore = calculateTotal();
+    // Valor antes da taxa = produtos menos o desconto do cupom
+    const valueBefore = calculateAmountDue();
     const result = valueBefore - (valueBefore * fee) / 100;
 
     setFinalAmount((Math.round(result * 100) / 100).toFixed(2));
@@ -192,6 +248,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
               ? Number(cardFeePercentage)
               : null,
           final_amount: isCard ? Number(finalAmount) : null,
+          coupon_id: couponId ? Number(couponId) : null,
           sale_items: items.map((item) => ({
             product_name: item.product_name.trim(),
             quantity: Number(item.quantity),
@@ -213,10 +270,13 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   }
 
   const itemsTotal = calculateTotal();
+  const selectedCoupon = getSelectedCoupon();
+  const couponDiscount = calculateCouponDiscount(selectedCoupon, itemsTotal);
+  const amountDue = itemsTotal - couponDiscount;
 
   // No cartão, o total da compra passa a ser o valor cobrado na maquininha
   const usesChargedAmount = paymentMethod === "cartao" && finalAmount !== "";
-  const total = usesChargedAmount ? Number(finalAmount) : itemsTotal;
+  const total = usesChargedAmount ? Number(finalAmount) : amountDue;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -407,6 +467,67 @@ export default function SaleFormModal({ onClose, onSuccess }) {
               </div>
             </div>
 
+            {/* Cupom de recompensa */}
+            {customerId && (
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center gap-2">
+                  <Ticket size={18} className="text-indigo-500" />
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Cupom de recompensa
+                  </h3>
+                </div>
+
+                {loadingCoupons ? (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Buscando cupons do cliente...
+                  </p>
+                ) : coupons.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Este cliente não tem cupons disponíveis. Os cupons são
+                    gerados ao resgatar uma recompensa com pontos.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {coupons.length === 1
+                        ? "O cliente tem 1 cupom disponível."
+                        : `O cliente tem ${coupons.length} cupons disponíveis.`}{" "}
+                      Apenas um pode ser usado por venda.
+                    </p>
+
+                    <select
+                      id="coupon"
+                      value={couponId}
+                      onChange={(event) => setCouponId(event.target.value)}
+                      disabled={saving}
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+                    >
+                      <option value="">Não usar cupom</option>
+
+                      {coupons.map((coupon) => (
+                        <option key={coupon.id} value={coupon.id}>
+                          {coupon.code} · {coupon.reward?.name} ·{" "}
+                          {formatDiscount(
+                            coupon.discount_type,
+                            coupon.discount_value
+                          )}
+                          {coupon.expires_at
+                            ? ` · vence ${formatDate(coupon.expires_at)}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedCoupon && (
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">
+                        Desconto aplicado: −{formatCurrency(couponDiscount)}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Forma de pagamento */}
             <div>
               <h3 className="text-sm font-semibold text-slate-900">
@@ -527,7 +648,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                       </div>
 
                       <p className="mt-3 text-xs text-slate-500">
-                        {formatCurrency(itemsTotal)} − taxa% = valor cobrado. O
+                        {formatCurrency(amountDue)} − taxa% = valor cobrado. O
                         resultado vai para o campo acima.
                       </p>
                     </div>
@@ -537,24 +658,39 @@ export default function SaleFormModal({ onClose, onSuccess }) {
             </div>
 
             {/* Total */}
-            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-blue-50 to-violet-50 p-5">
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Total da venda
-                </p>
+            <div className="rounded-xl bg-gradient-to-r from-blue-50 to-violet-50 p-5">
+              {selectedCoupon && (
+                <div className="mb-3 space-y-1 border-b border-indigo-100 pb-3 text-sm">
+                  <div className="flex justify-between text-slate-500">
+                    <span>Produtos</span>
+                    <span>{formatCurrency(itemsTotal)}</span>
+                  </div>
+                  <div className="flex justify-between font-medium text-emerald-700">
+                    <span>Cupom {selectedCoupon.code}</span>
+                    <span>−{formatCurrency(couponDiscount)}</span>
+                  </div>
+                </div>
+              )}
 
-                <p className="mt-1 text-xs text-slate-400">
-                  {usesChargedAmount
-                    ? `Valor cobrado no cartão · produtos: ${formatCurrency(
-                        itemsTotal
-                      )}`
-                    : "Os pontos serão calculados automaticamente."}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">
+                    Total da venda
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    {usesChargedAmount
+                      ? `Valor cobrado no cartão · a pagar: ${formatCurrency(
+                          amountDue
+                        )}`
+                      : "Os pontos serão calculados sobre o valor a pagar."}
+                  </p>
+                </div>
+
+                <p className="text-2xl font-bold text-slate-900">
+                  {formatCurrency(total)}
                 </p>
               </div>
-
-              <p className="text-2xl font-bold text-slate-900">
-                {formatCurrency(total)}
-              </p>
             </div>
           </div>
 

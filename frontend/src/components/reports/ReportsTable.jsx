@@ -33,6 +33,11 @@ export default function ReportsTable({ sales = [] }) {
     0
   );
 
+  const totalDiscounts = sales.reduce(
+    (total, sale) => total + (Number(sale.discount_amount) || 0),
+    0
+  );
+
   const totalPoints = sales.reduce(
     (total, sale) => total + (Number(sale.points_earned) || 0),
     0
@@ -88,7 +93,7 @@ export default function ReportsTable({ sales = [] }) {
         <>
           {/* Tabela */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr className="text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-6 py-3.5 font-semibold">Venda</th>
@@ -96,6 +101,9 @@ export default function ReportsTable({ sales = [] }) {
                   <th className="px-6 py-3.5 font-semibold">Cliente</th>
                   <th className="px-6 py-3.5 font-semibold">Colaborador</th>
                   <th className="px-6 py-3.5 font-semibold">Pagamento</th>
+                  <th className="px-6 py-3.5 text-right font-semibold">
+                    Desconto
+                  </th>
                   <th className="px-6 py-3.5 text-right font-semibold">
                     Valor cobrado
                   </th>
@@ -146,6 +154,22 @@ export default function ReportsTable({ sales = [] }) {
                         <PaymentMethodBadge method={sale.payment_method} />
                       </td>
 
+                      {/* Desconto do cupom */}
+                      <td className="px-6 py-4 text-right">
+                        {Number(sale.discount_amount) > 0 ? (
+                          <>
+                            <div className="font-semibold text-emerald-700">
+                              −{formatCurrency(sale.discount_amount)}
+                            </div>
+                            <div className="mt-0.5 font-mono text-xs text-slate-400">
+                              {sale.reward_redemption?.code}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+
                       {/* Valor cobrado */}
                       <td className="px-6 py-4 text-right">
                         <span className="font-semibold text-slate-800">
@@ -173,6 +197,12 @@ export default function ReportsTable({ sales = [] }) {
                     className="px-6 py-4 text-right text-sm font-semibold text-slate-600"
                   >
                     Total do período
+                  </td>
+
+                  <td className="px-6 py-4 text-right text-sm font-bold text-emerald-700">
+                    {totalDiscounts > 0
+                      ? `−${formatCurrency(totalDiscounts)}`
+                      : "—"}
                   </td>
 
                   <td className="px-6 py-4 text-right text-sm font-bold text-slate-900">

@@ -21,6 +21,7 @@ Rails.application.routes.draw do
         member do
           patch :deactivate
           get :points_history
+          get :coupons
         end
       end
 

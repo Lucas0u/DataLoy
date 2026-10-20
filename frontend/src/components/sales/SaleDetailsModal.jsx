@@ -131,6 +131,32 @@ export default function SaleDetailsModal({ sale, onClose }) {
             </div>
           </div>
 
+          {/* Cupom utilizado */}
+          {sale.reward_redemption && (
+            <div className="flex flex-col gap-1 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
+                  Cupom de recompensa
+                </p>
+                <p className="mt-1 font-semibold text-slate-800">
+                  {sale.reward_redemption.code}
+                  {sale.reward_redemption.reward?.name
+                    ? ` · ${sale.reward_redemption.reward.name}`
+                    : ""}
+                </p>
+              </div>
+
+              <div className="text-left sm:text-right">
+                <p className="text-xs text-slate-500">
+                  Produtos: {formatCurrency(sale.total_amount)}
+                </p>
+                <p className="font-semibold text-emerald-700">
+                  Desconto: −{formatCurrency(sale.discount_amount)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Resumo */}
           <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

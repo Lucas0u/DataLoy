@@ -44,13 +44,16 @@ class Api::V1::ReportsController < ApplicationController
         customers_count: customers_count,
         highest_sale: highest_sale,
         average_points_per_sale: average_points_per_sale.round(2),
-        by_payment_method: payment_method_breakdown(sales)
+        by_payment_method: payment_method_breakdown(sales),
+        total_discounts: sales.sum(:discount_amount).to_f,
+        coupons_used: sales.where.not(reward_redemption_id: nil).count
       },
 
       sales: sales.order(created_at: :desc).as_json(
         only: [
           :id,
           :total_amount,
+          :discount_amount,
           :final_amount,
           :payment_method,
           :points_earned,
@@ -58,7 +61,8 @@ class Api::V1::ReportsController < ApplicationController
         ],
         include: {
           customer: { only: [:id, :name] },
-          user: { only: [:id, :name] }
+          user: { only: [:id, :name] },
+          reward_redemption: { only: [:id, :code] }
         }
       )
     }, status: :ok
@@ -196,6 +200,8 @@ class Api::V1::ReportsController < ApplicationController
         "Cliente",
         "Colaborador",
         "Pagamento",
+        "Cupom",
+        "Desconto",
         "Valor Cobrado",
         "Pontos Gerados"
       ], style: excel_header_style(workbook)
@@ -207,6 +213,8 @@ class Api::V1::ReportsController < ApplicationController
           sale.customer&.name,
           sale.user&.name,
           sale.payment_method_label,
+          sale.reward_redemption&.code || "-",
+          sale.discount_amount.to_f,
           sale.charged_amount,
           sale.points_earned
         ], style: [
@@ -215,6 +223,8 @@ class Api::V1::ReportsController < ApplicationController
           excel_text_style(workbook),            # Cliente
           excel_text_style(workbook),            # Colaborador
           excel_center_style(workbook),          # Pagamento
+          excel_center_style(workbook),          # Cupom
+          excel_currency_center_style(workbook), # Desconto
           excel_currency_center_style(workbook), # Valor Cobrado
           excel_center_style(workbook)           # Pontos Gerados
         ]
@@ -223,8 +233,8 @@ class Api::V1::ReportsController < ApplicationController
       format_excel_sheet(
         sheet,
         5,
-        "G",
-        [12, 20, 30, 28, 16, 18, 18]
+        "I",
+        [12, 20, 30, 28, 16, 14, 14, 18, 18]
       )
     end
 
@@ -799,7 +809,7 @@ class Api::V1::ReportsController < ApplicationController
   end
 
   def filtered_sales
-    sales = current_store.sales.includes(:customer, :user)
+    sales = current_store.sales.includes(:customer, :user, :reward_redemption)
 
     if params[:start_date].present?
       start_date = Date.parse(params[:start_date])

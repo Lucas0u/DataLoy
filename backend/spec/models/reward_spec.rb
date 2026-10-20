@@ -26,6 +26,31 @@ RSpec.describe Reward, type: :model do
       expect(reward).not_to be_valid
     end
 
+    it "exige o valor do desconto ao criar" do
+      reward.discount_value = nil
+
+      expect(reward).not_to be_valid
+    end
+
+    it "não permite tipo de desconto desconhecido" do
+      reward.discount_type = "brinde"
+
+      expect(reward).not_to be_valid
+    end
+
+    it "não permite porcentagem acima de 100" do
+      reward.discount_type = "percentage"
+      reward.discount_value = 101
+
+      expect(reward).not_to be_valid
+    end
+
+    it "não permite validade do cupom zerada" do
+      reward.coupon_validity_days = 0
+
+      expect(reward).not_to be_valid
+    end
+
     it "não permite quantidade disponível negativa" do
       reward.quantity_available = -1
 
@@ -58,10 +83,31 @@ RSpec.describe Reward, type: :model do
       expect(reward.redeemable?).to be(false)
     end
 
+    it "retorna false quando a recompensa não tem desconto definido" do
+      reward = build(:reward, active: true, discount_value: nil)
+
+      expect(reward.redeemable?).to be(false)
+    end
+
     it "permite recompensa sem limite de estoque" do
       reward = build(:reward, active: true, quantity_available: nil)
 
       expect(reward.redeemable?).to be(true)
+    end
+  end
+
+  describe "#coupon_expiration_from" do
+    it "vence no fim do dia, X dias após o resgate" do
+      reward = build(:reward, coupon_validity_days: 10)
+      time = Time.zone.local(2026, 10, 20, 9, 0)
+
+      expect(reward.coupon_expiration_from(time)).to eq(Time.zone.local(2026, 10, 30).end_of_day)
+    end
+
+    it "não vence quando a validade está vazia" do
+      reward = build(:reward, coupon_validity_days: nil)
+
+      expect(reward.coupon_expiration_from).to be_nil
     end
   end
 

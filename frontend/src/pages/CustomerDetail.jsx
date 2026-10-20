@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Mail, Phone, ShoppingBag, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Mail,
+  Phone,
+  ShoppingBag,
+  Sparkles,
+  Ticket,
+} from "lucide-react";
 import api from "../services/api";
+import { getChargedAmount } from "../utils/payment";
+import { formatDate, formatDiscount, getCouponStatus } from "../utils/coupon";
 
 export default function CustomerDetail() {
   const { id } = useParams();
@@ -10,6 +19,7 @@ export default function CustomerDetail() {
   const [customer, setCustomer] = useState(null);
   const [pointsHistory, setPointsHistory] = useState(null);
   const [sales, setSales] = useState([]);
+  const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,15 +36,18 @@ export default function CustomerDetail() {
         setLoading(true);
         setError("");
 
-        const [customerRes, historyRes, salesRes] = await Promise.all([
-          api.get(`/api/v1/customers/${id}`),
-          api.get(`/api/v1/customers/${id}/points_history`),
-          api.get("/api/v1/sales", { params: { customer_id: id } }),
-        ]);
+        const [customerRes, historyRes, salesRes, couponsRes] =
+          await Promise.all([
+            api.get(`/api/v1/customers/${id}`),
+            api.get(`/api/v1/customers/${id}/points_history`),
+            api.get("/api/v1/sales", { params: { customer_id: id } }),
+            api.get(`/api/v1/customers/${id}/coupons`),
+          ]);
 
         setCustomer(customerRes.data);
         setPointsHistory(historyRes.data);
         setSales(salesRes.data.data);
+        setCoupons(couponsRes.data || []);
       } catch (err) {
         setError(
           err.response?.data?.error || "Não foi possível carregar o cliente."
@@ -133,6 +146,80 @@ export default function CustomerDetail() {
         </div>
       </div>
 
+      {/* Cupons de recompensa */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+            <Ticket size={18} className="text-indigo-500" />
+            Cupons de recompensa
+          </h2>
+
+          <span className="text-xs text-slate-400">
+            {coupons.filter((coupon) => coupon.status === "available").length}{" "}
+            disponível(is) para a próxima compra
+          </span>
+        </div>
+
+        {coupons.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">
+            Nenhum cupom resgatado. Os cupons são gerados na tela de
+            Recompensas, trocando os pontos do cliente.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {coupons.map((coupon) => {
+              const status = getCouponStatus(coupon.status);
+
+              return (
+                <div
+                  key={coupon.id}
+                  className={`rounded-xl border p-4 text-sm ${
+                    coupon.status === "available"
+                      ? "border-indigo-200 bg-indigo-50/40"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-mono font-bold tracking-wide text-slate-800">
+                      {coupon.code}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${status.className}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <p className="mt-1 font-semibold text-indigo-700">
+                    {formatDiscount(
+                      coupon.discount_type,
+                      coupon.discount_value
+                    )}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {coupon.reward?.name}
+                  </p>
+
+                  <p className="mt-2 text-xs text-slate-400">
+                    Resgatado em {formatDate(coupon.redeemed_at)} ·{" "}
+                    {coupon.points_used} pts
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {coupon.status === "used"
+                      ? coupon.sale_id
+                        ? `Usado na venda #${coupon.sale_id}`
+                        : `Usado em ${formatDate(coupon.used_at)}`
+                      : coupon.expires_at
+                        ? `${coupon.status === "expired" ? "Venceu" : "Vence"} em ${formatDate(coupon.expires_at)}`
+                        : "Sem vencimento"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
@@ -159,7 +246,7 @@ export default function CustomerDetail() {
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-slate-800">
-                      {formatCurrency(sale.total_amount)}
+                      {formatCurrency(getChargedAmount(sale))}
                     </p>
                     <p className="text-xs text-indigo-500">
                       +{sale.points_earned} pts

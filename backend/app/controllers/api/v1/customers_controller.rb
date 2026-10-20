@@ -1,5 +1,5 @@
 class Api::V1::CustomersController < ApplicationController
-  before_action :set_customer, only: [:show, :update, :deactivate, :points_history]
+  before_action :set_customer, only: [:show, :update, :deactivate, :points_history, :coupons]
 
   # GET /api/v1/customers
   def index
@@ -96,6 +96,19 @@ class Api::V1::CustomersController < ApplicationController
         ]
       )
     }, status: :ok
+  end
+
+  # GET /api/v1/customers/:id/coupons
+  # Params opcionais: status=available (só os que podem ser usados agora)
+  def coupons
+    coupons = @customer.reward_redemptions
+                       .where(store: current_store)
+                       .includes(:reward, :user, :sale, :customer)
+                       .order(redeemed_at: :desc)
+
+    coupons = coupons.usable if params[:status] == "available"
+
+    render json: coupons.map(&:as_coupon_json), status: :ok
   end
 
   private

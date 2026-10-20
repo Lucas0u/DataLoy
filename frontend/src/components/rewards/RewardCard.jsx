@@ -1,16 +1,28 @@
-import { Calendar, Gift, Package, Pencil, Power } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  Gift,
+  Package,
+  Pencil,
+  Power,
+  Ticket,
+} from "lucide-react";
+import { formatDiscount } from "../../utils/coupon";
 
 export default function RewardCard({
   reward,
   onEdit,
   onToggleActive,
   onRedeem,
+  isAdmin = false,
 }) {
   const isExpired =
     reward.valid_until && new Date(reward.valid_until) < new Date();
   const isOutOfStock =
     reward.quantity_available !== null && reward.quantity_available <= 0;
-  const canRedeem = reward.active && !isExpired && !isOutOfStock;
+  const hasDiscount =
+    reward.discount_value !== null && reward.discount_value !== undefined;
+  const canRedeem = reward.active && !isExpired && !isOutOfStock && hasDiscount;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
@@ -39,17 +51,40 @@ export default function RewardCard({
         </p>
       )}
 
-      <div className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-indigo-600">
+      <div
+        className={`mt-4 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${
+          hasDiscount
+            ? "bg-indigo-50 text-indigo-700"
+            : "bg-amber-50 text-amber-700"
+        }`}
+      >
+        <Ticket size={16} />
+        {hasDiscount
+          ? `Cupom de ${formatDiscount(
+              reward.discount_type,
+              reward.discount_value,
+              { suffix: false }
+            )}`
+          : "Defina o desconto para liberar o resgate"}
+      </div>
+
+      <div className="mt-3 text-sm font-semibold text-slate-700">
         {reward.points_required} pontos
       </div>
 
       <div className="mt-3 space-y-1.5 text-xs text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <Clock size={14} />
+          {reward.coupon_validity_days
+            ? `Cupom vale ${reward.coupon_validity_days} dia(s) após o resgate`
+            : "Cupom sem vencimento"}
+        </div>
         {reward.valid_until && (
           <div
             className={`flex items-center gap-1.5 ${isExpired ? "text-red-500" : ""}`}
           >
             <Calendar size={14} />
-            {isExpired ? "Expirada em" : "Válida até"}{" "}
+            {isExpired ? "Resgates encerrados em" : "Resgate até"}{" "}
             {new Date(reward.valid_until).toLocaleDateString("pt-BR")}
           </div>
         )}
@@ -75,23 +110,27 @@ export default function RewardCard({
           Resgatar
         </button>
 
-        <button
-          type="button"
-          onClick={() => onEdit(reward)}
-          className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
-          aria-label="Editar"
-        >
-          <Pencil size={17} />
-        </button>
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              onClick={() => onEdit(reward)}
+              className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
+              aria-label="Editar"
+            >
+              <Pencil size={17} />
+            </button>
 
-        <button
-          type="button"
-          onClick={() => onToggleActive(reward)}
-          className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
-          aria-label={reward.active ? "Desativar" : "Ativar"}
-        >
-          <Power size={17} />
-        </button>
+            <button
+              type="button"
+              onClick={() => onToggleActive(reward)}
+              className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
+              aria-label={reward.active ? "Desativar" : "Ativar"}
+            >
+              <Power size={17} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
