@@ -1,8 +1,12 @@
-import { X } from "lucide-react";
+import { useState } from "react";
+import { Printer, X } from "lucide-react";
+import ReceiptModal from "./ReceiptModal";
 import PaymentMethodBadge from "./PaymentMethodBadge";
 import { getChargedAmount } from "../../utils/payment";
 
 export default function SaleDetailsModal({ sale, onClose }) {
+  const [showReceipt, setShowReceipt] = useState(false);
+
   if (!sale) return null;
 
   function formatCurrency(value) {
@@ -182,7 +186,16 @@ export default function SaleDetailsModal({ sale, onClose }) {
         </div>
 
         {/* Rodapé */}
-        <div className="flex justify-end border-t border-slate-200 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <button
+            type="button"
+            onClick={() => setShowReceipt(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+          >
+            <Printer size={16} />
+            Recibo
+          </button>
+
           <button
             type="button"
             onClick={onClose}
@@ -192,6 +205,10 @@ export default function SaleDetailsModal({ sale, onClose }) {
           </button>
         </div>
       </div>
+
+      {showReceipt && (
+        <ReceiptModal saleId={sale.id} onClose={() => setShowReceipt(false)} />
+      )}
     </div>
   );
 }

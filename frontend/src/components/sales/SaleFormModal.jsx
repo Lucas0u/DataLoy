@@ -239,7 +239,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
     try {
       setSaving(true);
 
-      await api.post("/api/v1/sales", {
+      const response = await api.post("/api/v1/sales", {
         sale: {
           customer_id: Number(customerId),
           payment_method: paymentMethod,
@@ -257,7 +257,8 @@ export default function SaleFormModal({ onClose, onSuccess }) {
         },
       });
 
-      onSuccess();
+      // A resposta traz a venda e o resultado da impressão do recibo
+      onSuccess(response.data);
     } catch (error) {
       console.error("Erro ao registrar venda:", error);
 

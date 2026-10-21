@@ -25,7 +25,12 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :sales, only: [:index, :show, :create]
+      resources :sales, only: [:index, :show, :create] do
+        member do
+          get :receipt
+          post :print, action: :print_receipt
+        end
+      end
     end
   end
 end

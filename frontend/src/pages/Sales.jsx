@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
-import { CircleDollarSign, Plus, ShoppingCart, Star } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleDollarSign,
+  Plus,
+  Printer,
+  ShoppingCart,
+  Star,
+  X,
+} from "lucide-react";
 
 import SalesTable from "../components/sales/SalesTable";
 import SaleFormModal from "../components/sales/SaleFormModal";
 import SaleDetailsModal from "../components/sales/SaleDetailsModal";
+import ReceiptModal from "../components/sales/ReceiptModal";
 import { getChargedAmount } from "../utils/payment";
 import api from "../services/api";
 
@@ -14,6 +24,11 @@ export default function Sales() {
 
   const [showFormModal, setShowFormModal] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
+
+  // Resultado do recibo da última venda registrada
+  const [receiptNotice, setReceiptNotice] = useState(null);
+  const [receiptSaleId, setReceiptSaleId] = useState(null);
+  const [reprinting, setReprinting] = useState(false);
 
   async function loadSales() {
     try {
@@ -63,9 +78,47 @@ export default function Sales() {
     setSelectedSale(sale);
   }
 
-  function handleSaleCreated() {
+  function handleSaleCreated(sale) {
     setShowFormModal(false);
+
+    if (sale?.id) {
+      setReceiptNotice({
+        saleId: sale.id,
+        printed: Boolean(sale.receipt?.printed),
+        message: sale.receipt?.printed
+          ? sale.receipt?.message || "Recibo enviado para a impressora."
+          : sale.receipt?.error || "O recibo não foi impresso.",
+      });
+    }
+
     loadSales();
+  }
+
+  async function handleReprint() {
+    if (!receiptNotice) return;
+
+    try {
+      setReprinting(true);
+
+      const response = await api.post(
+        `/api/v1/sales/${receiptNotice.saleId}/print`
+      );
+
+      setReceiptNotice({
+        ...receiptNotice,
+        printed: true,
+        message: response.data.message,
+      });
+    } catch (err) {
+      setReceiptNotice({
+        ...receiptNotice,
+        printed: false,
+        message:
+          err.response?.data?.error || "Não foi possível imprimir o recibo.",
+      });
+    } finally {
+      setReprinting(false);
+    }
   }
 
   if (loading) {
@@ -193,6 +246,77 @@ export default function Sales() {
         </div>
       </div>
 
+      {/* Resultado do recibo da última venda */}
+      {receiptNotice && (
+        <div
+          className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+            receiptNotice.printed
+              ? "border-emerald-200 bg-emerald-50"
+              : "border-amber-200 bg-amber-50"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {receiptNotice.printed ? (
+              <CheckCircle2
+                size={20}
+                className="mt-0.5 shrink-0 text-emerald-600"
+              />
+            ) : (
+              <AlertTriangle
+                size={20}
+                className="mt-0.5 shrink-0 text-amber-600"
+              />
+            )}
+
+            <div className="text-sm">
+              <p className="font-semibold text-slate-800">
+                Venda #{receiptNotice.saleId} registrada
+              </p>
+              <p
+                className={
+                  receiptNotice.printed ? "text-emerald-700" : "text-amber-800"
+                }
+              >
+                {receiptNotice.message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setReceiptSaleId(receiptNotice.saleId)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Ver recibo
+            </button>
+
+            <button
+              type="button"
+              onClick={handleReprint}
+              disabled={reprinting}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Printer size={15} />
+              {reprinting
+                ? "Imprimindo..."
+                : receiptNotice.printed
+                  ? "Reimprimir"
+                  : "Tentar novamente"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setReceiptNotice(null)}
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-white/60 hover:text-slate-600"
+              aria-label="Fechar aviso"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabela */}
       <div>
         <div className="mb-4">
@@ -212,6 +336,13 @@ export default function Sales() {
         <SaleFormModal
           onClose={() => setShowFormModal(false)}
           onSuccess={handleSaleCreated}
+        />
+      )}
+
+      {receiptSaleId && (
+        <ReceiptModal
+          saleId={receiptSaleId}
+          onClose={() => setReceiptSaleId(null)}
         />
       )}
 

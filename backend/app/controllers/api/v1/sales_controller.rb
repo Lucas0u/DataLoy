@@ -1,5 +1,5 @@
 class Api::V1::SalesController < ApplicationController
-  before_action :set_sale, only: [:show]
+  before_action :set_sale, only: [:show, :receipt, :print_receipt]
 
   # GET /api/v1/sales
   # Params opcionais: customer_id, page, per_page
@@ -188,7 +188,10 @@ class Api::V1::SalesController < ApplicationController
       )
     end
 
-    render json: sale.as_json(sale_json_options), status: :created
+    # Toda venda gera um recibo; se a impressão falhar, a venda continua salva
+    render json: sale.as_json(sale_json_options).merge(
+      "receipt" => auto_print_receipt(sale)
+    ), status: :created
 
   rescue SaleError => e
     render json: { error: e.message }, status: :unprocessable_entity
@@ -202,6 +205,37 @@ class Api::V1::SalesController < ApplicationController
     render json: {
       error: "Não foi possível registrar a venda. #{e.message}"
     }, status: :unprocessable_entity
+  end
+
+  # GET /api/v1/sales/:id/receipt
+  # Prévia do recibo em texto, do jeito que sai no papel
+  def receipt
+    sale_receipt = Receipts::SaleReceipt.new(@sale)
+    profile = sale_receipt.profile
+
+    render json: {
+      sale_id: @sale.id,
+      columns: profile.columns,
+      text: sale_receipt.to_text,
+      printer: {
+        configured: profile.printer_configured?,
+        mode: profile.printer_mode
+      }
+    }, status: :ok
+  end
+
+  # POST /api/v1/sales/:id/print
+  # Imprime (ou reimprime) o recibo da venda
+  def print_receipt
+    sale_receipt = Receipts::SaleReceipt.new(@sale)
+    Receipts::Printer.deliver(sale_receipt.to_escpos, sale_receipt.profile)
+
+    render json: {
+      printed: true,
+      message: "Recibo da venda ##{@sale.id} enviado para a impressora."
+    }, status: :ok
+  rescue Receipts::PrintError => e
+    render json: { printed: false, error: e.message }, status: :unprocessable_entity
   end
 
   private
@@ -232,6 +266,26 @@ class Api::V1::SalesController < ApplicationController
         }
       }
     }
+  end
+
+  def auto_print_receipt(sale)
+    sale_receipt = Receipts::SaleReceipt.new(sale.reload)
+    profile = sale_receipt.profile
+
+    unless profile.auto_print? && profile.printer_configured?
+      return {
+        printed: false,
+        error: "Nenhuma impressora configurada para esta loja. Use a prévia do recibo."
+      }
+    end
+
+    Receipts::Printer.deliver(sale_receipt.to_escpos, profile)
+    { printed: true, message: "Recibo enviado para a impressora." }
+  rescue Receipts::PrintError => e
+    { printed: false, error: e.message }
+  rescue StandardError => e
+    Rails.logger.error("[recibo] venda ##{sale.id}: #{e.class} #{e.message}")
+    { printed: false, error: "Não foi possível gerar o recibo." }
   end
 
   def set_sale

@@ -1,0 +1,53 @@
+# ============================================================================
+# Dados de cada loja impressos no recibo de venda (ESC/POS)
+# ----------------------------------------------------------------------------
+# Estas informações são definidas pelos desenvolvedores, aqui no código.
+#
+# - "default" vale para todas as lojas.
+# - Em "stores", a chave é o ID da loja (tabela stores). O que estiver ali
+#   substitui o "default" só para aquela loja.
+#
+# Impressora (printer):
+#   mode: none     -> não imprime (só mostra a prévia do recibo no sistema)
+#   mode: network  -> impressora de rede: informe host (IP) e port (9100)
+#   mode: file     -> impressora USB compartilhada no Windows ou arquivo de
+#                     dispositivo no Linux: informe path
+#                     ex.: '\\localhost\TERMICA'  ou  '/dev/usb/lp0'
+#
+# A impressora também pode ser configurada pelo .env, sem mexer neste arquivo:
+#   RECEIPT_PRINTER_MODE, RECEIPT_PRINTER_HOST, RECEIPT_PRINTER_PORT,
+#   RECEIPT_PRINTER_PATH
+# ============================================================================
+
+default:
+  trade_name: ""            # nome fantasia (vazio = nome da loja no sistema)
+  legal_name: ""            # razão social
+  cnpj: ""
+  state_registration: ""    # inscrição estadual (opcional)
+  address: ""
+  city: ""
+  phone: ""
+  footer: "Obrigado pela preferência! Volte sempre."
+  time_zone: "America/Bahia"
+
+  receipt:
+    columns: 48             # 80 mm = 48 colunas | 58 mm = 32 colunas
+    encoding: cp850         # cp850 (acentos) | cp860 | ascii (sem acentos)
+    auto_print: true        # imprime automaticamente ao registrar a venda
+
+  printer:
+    # nos testes automatizados (rspec) nunca imprime de verdade
+    mode: <%= Rails.env.test? ? "none" : ENV.fetch("RECEIPT_PRINTER_MODE", "none") %>
+    host: "<%= ENV.fetch("RECEIPT_PRINTER_HOST", "") %>"
+    port: <%= ENV.fetch("RECEIPT_PRINTER_PORT", "9100") %>
+    path: '<%= ENV.fetch("RECEIPT_PRINTER_PATH", "") %>'
+
+stores:
+  1:
+    trade_name: "Miss Story"
+    legal_name: "Miss Story Comércio de Artigos de Vestuário LTDA"
+    cnpj: "00.000.000/0001-00"        # TROCAR pelo CNPJ real
+    state_registration: ""
+    address: "Rua Exemplo, 123 - Centro"
+    city: "Paulo Afonso - BA"
+    phone: "(75) 99999-9999"

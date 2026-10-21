@@ -292,6 +292,37 @@ RSpec.describe "Api::V1::Sales", type: :request do
       end
     end
 
+    context "recibo" do
+      it "informa que o recibo não foi impresso quando não há impressora" do
+        post "/api/v1/sales", params: sale_params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+        expect(json_response["receipt"]["printed"]).to be(false)
+        expect(json_response["receipt"]["error"]).to include("Nenhuma impressora")
+      end
+
+      it "imprime o recibo automaticamente quando há impressora" do
+        allow_any_instance_of(StoreProfile).to receive(:printer_configured?).and_return(true)
+        expect(Receipts::Printer).to receive(:deliver).once.and_return(true)
+
+        post "/api/v1/sales", params: sale_params, headers: auth_headers(admin)
+
+        expect(json_response["receipt"]["printed"]).to be(true)
+      end
+
+      it "registra a venda mesmo se a impressora falhar" do
+        allow_any_instance_of(StoreProfile).to receive(:printer_configured?).and_return(true)
+        allow(Receipts::Printer).to receive(:deliver)
+          .and_raise(Receipts::PrintError, "Impressora desligada")
+
+        expect {
+          post "/api/v1/sales", params: sale_params, headers: auth_headers(admin)
+        }.to change(Sale, :count).by(1)
+
+        expect(json_response["receipt"]).to include("printed" => false, "error" => "Impressora desligada")
+      end
+    end
+
     context "quando a forma de pagamento é inválida" do
       it "retorna status 422 sem forma de pagamento" do
         post "/api/v1/sales",
@@ -362,6 +393,43 @@ RSpec.describe "Api::V1::Sales", type: :request do
 
         expect(response).to have_http_status(:unprocessable_entity)
       end
+    end
+  end
+
+  describe "recibo de uma venda" do
+    let(:sale) { create(:sale, store: store, customer: customer, user: admin) }
+
+    it "GET /api/v1/sales/:id/receipt retorna a prévia em texto" do
+      get "/api/v1/sales/#{sale.id}/receipt", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response["text"]).to include("Venda ##{sale.id}")
+      expect(json_response["columns"]).to eq(48)
+      expect(json_response["printer"]["configured"]).to be(false)
+    end
+
+    it "POST /api/v1/sales/:id/print envia o recibo para a impressora" do
+      expect(Receipts::Printer).to receive(:deliver).once.and_return(true)
+
+      post "/api/v1/sales/#{sale.id}/print", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response["printed"]).to be(true)
+    end
+
+    it "POST /api/v1/sales/:id/print retorna o erro da impressora" do
+      post "/api/v1/sales/#{sale.id}/print", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json_response["error"]).to include("Nenhuma impressora")
+    end
+
+    it "não mostra recibo de venda de outra loja" do
+      other_sale = create(:sale)
+
+      get "/api/v1/sales/#{other_sale.id}/receipt", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:not_found)
     end
   end
 end
