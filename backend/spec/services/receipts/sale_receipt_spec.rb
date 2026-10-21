@@ -70,6 +70,28 @@ RSpec.describe Receipts::SaleReceipt do
     end
   end
 
+  describe "venda sem cadastro" do
+    let(:guest_sale) do
+      create(:sale, store: store, customer: nil, guest_name: "Maria da feira", user: user,
+                    total_amount: 50, final_amount: 50, payment_method: "dinheiro", points_earned: 0)
+    end
+    let(:text) { described_class.new(guest_sale, profile: profile).to_text }
+
+    before { create(:sale_item, sale: guest_sale, product_name: "Brinco", quantity: 1, unit_price: 50) }
+
+    it "mostra o nome informado e não mostra CPF" do
+      expect(text).to include("Nome: Maria da feira")
+      expect(text).to include("Venda sem cadastro")
+      expect(text).not_to include("CPF")
+    end
+
+    it "não mostra pontos e convida o cliente a se cadastrar" do
+      expect(text).not_to include("Saldo total de pontos")
+      expect(text).to include("Esta compra não gerou pontos.")
+      expect(text).to include("Cadastre-se")
+    end
+  end
+
   describe "#to_escpos" do
     let(:bytes) { receipt.to_escpos }
 

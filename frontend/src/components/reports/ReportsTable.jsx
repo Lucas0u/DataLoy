@@ -1,5 +1,6 @@
 import { FileText, Star, Users } from "lucide-react";
 import PaymentMethodBadge from "../sales/PaymentMethodBadge";
+import { getSaleCustomerName } from "../../utils/saleCustomer";
 import { getChargedAmount } from "../../utils/payment";
 
 function formatCurrency(value) {
@@ -140,7 +141,7 @@ export default function ReportsTable({ sales = [] }) {
                       {/* Cliente */}
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-700">
-                          {sale.customer?.name || "Cliente não informado"}
+                          {getSaleCustomerName(sale)}
                         </div>
                       </td>
 

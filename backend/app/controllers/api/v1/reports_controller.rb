@@ -52,6 +52,7 @@ class Api::V1::ReportsController < ApplicationController
       sales: sales.order(created_at: :desc).as_json(
         only: [
           :id,
+          :guest_name,
           :total_amount,
           :discount_amount,
           :final_amount,
@@ -210,7 +211,7 @@ class Api::V1::ReportsController < ApplicationController
         sheet.add_row [
           sale.id,
           sale.created_at.strftime("%d/%m/%Y %H:%M"),
-          sale.customer&.name,
+          sale.customer_name,
           sale.user&.name,
           sale.payment_method_label,
           sale.reward_redemption&.code || "-",

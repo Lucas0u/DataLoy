@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Calculator, Plus, Ticket, Trash2, X } from "lucide-react";
 import api from "../../services/api";
 import {
+  DEFAULT_GUEST_NAME,
+  GUEST_NAME_MAX_LENGTH,
+} from "../../utils/saleCustomer";
+import {
   calculateCouponDiscount,
   formatDate,
   formatDiscount,
@@ -24,6 +28,10 @@ function isItemFilled(item) {
 export default function SaleFormModal({ onClose, onSuccess }) {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
+
+  // Venda sem cadastro: sem cliente, com nome livre e sem pontos
+  const [isGuest, setIsGuest] = useState(false);
+  const [guestName, setGuestName] = useState("");
 
   const [paymentMethod, setPaymentMethod] = useState("");
   const [cardFeePercentage, setCardFeePercentage] = useState("");
@@ -143,6 +151,19 @@ export default function SaleFormModal({ onClose, onSuccess }) {
     }, 0);
   }
 
+  function handleGuestChange(guest) {
+    setIsGuest(guest);
+    setError("");
+
+    // Venda sem cadastro não tem cliente nem cupom
+    if (guest) {
+      setCustomerId("");
+      setCouponId("");
+    } else {
+      setGuestName("");
+    }
+  }
+
   function getSelectedCoupon() {
     return coupons.find((coupon) => String(coupon.id) === String(couponId));
   }
@@ -200,8 +221,8 @@ export default function SaleFormModal({ onClose, onSuccess }) {
 
     setError("");
 
-    if (!customerId) {
-      setError("Selecione um cliente.");
+    if (!isGuest && !customerId) {
+      setError("Selecione um cliente ou marque venda sem cadastro.");
       return;
     }
 
@@ -266,7 +287,8 @@ export default function SaleFormModal({ onClose, onSuccess }) {
 
       const response = await api.post("/api/v1/sales", {
         sale: {
-          customer_id: Number(customerId),
+          customer_id: isGuest ? null : Number(customerId),
+          guest_name: isGuest ? guestName.trim() : null,
           payment_method: paymentMethod,
           card_fee_percentage:
             isCard && showFeeCalculator && cardFeePercentage !== ""
@@ -345,33 +367,92 @@ export default function SaleFormModal({ onClose, onSuccess }) {
 
             {/* Cliente */}
             <div>
-              <label
-                htmlFor="customer"
-                className="mb-2 block text-sm font-semibold text-slate-700"
-              >
-                Cliente
-              </label>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-700">
+                  Cliente
+                </span>
 
-              <select
-                id="customer"
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-                disabled={loadingCustomers || saving}
-                required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">
-                  {loadingCustomers
-                    ? "Carregando clientes..."
-                    : "Selecione um cliente"}
-                </option>
+                <div
+                  className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold"
+                  role="group"
+                  aria-label="Tipo de venda"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleGuestChange(false)}
+                    disabled={saving}
+                    aria-pressed={!isGuest}
+                    className={`rounded-md px-3 py-1.5 transition ${
+                      !isGuest
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Cliente cadastrado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGuestChange(true)}
+                    disabled={saving}
+                    aria-pressed={isGuest}
+                    className={`rounded-md px-3 py-1.5 transition ${
+                      isGuest
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    Venda sem cadastro
+                  </button>
+                </div>
+              </div>
 
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
+              {isGuest ? (
+                <>
+                  <label htmlFor="guest-name" className="sr-only">
+                    Nome do cliente
+                  </label>
+                  <input
+                    id="guest-name"
+                    type="text"
+                    value={guestName}
+                    onChange={(event) => setGuestName(event.target.value)}
+                    maxLength={GUEST_NAME_MAX_LENGTH}
+                    placeholder={`Nome do cliente (vazio = ${DEFAULT_GUEST_NAME})`}
+                    disabled={saving}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
+                  />
+                  <p className="mt-1.5 text-xs text-amber-700">
+                    Venda sem cadastro não gera pontos nem permite usar cupom.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label htmlFor="customer" className="sr-only">
+                    Cliente cadastrado
+                  </label>
+
+                  <select
+                    id="customer"
+                    value={customerId}
+                    onChange={(event) => setCustomerId(event.target.value)}
+                    disabled={loadingCustomers || saving}
+                    required={!isGuest}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">
+                      {loadingCustomers
+                        ? "Carregando clientes..."
+                        : "Selecione um cliente"}
+                    </option>
+
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
 
             {/* Produtos */}
@@ -519,7 +600,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
             </div>
 
             {/* Cupom de recompensa */}
-            {customerId && (
+            {!isGuest && customerId && (
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2">
                   <Ticket size={18} className="text-indigo-500" />
@@ -746,7 +827,9 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                       ? `Valor cobrado no cartão · a pagar: ${formatCurrency(
                           amountDue
                         )}`
-                      : "Os pontos serão calculados sobre o valor a pagar."}
+                      : isGuest
+                        ? "Venda sem cadastro: não gera pontos."
+                        : "Os pontos serão calculados sobre o valor a pagar."}
                   </p>
                 </div>
 

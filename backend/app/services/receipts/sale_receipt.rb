@@ -81,8 +81,14 @@ module Receipts
 
     def customer_section(doc)
       doc.text("CLIENTE", bold: true)
-      doc.text("Nome: #{sale.customer.name}")
-      doc.text("CPF: #{self.class.mask_cpf(sale.customer.cpf)}")
+      doc.text("Nome: #{sale.customer_name}")
+
+      if sale.guest?
+        doc.text("Venda sem cadastro")
+      else
+        doc.text("CPF: #{self.class.mask_cpf(sale.customer.cpf)}")
+      end
+
       doc.separator
     end
 
@@ -118,6 +124,15 @@ module Receipts
 
     def loyalty_section(doc)
       doc.text("PROGRAMA DE FIDELIDADE", align: :center, bold: true)
+
+      # Venda sem cadastro não gera pontos: convida o cliente a se cadastrar
+      if sale.guest?
+        doc.text("Esta compra não gerou pontos.", align: :center)
+        doc.text("Cadastre-se e ganhe pontos nas próximas compras!", align: :center)
+        doc.separator
+        return
+      end
+
       doc.pair("Pontos nesta compra", "+#{sale.points_earned}")
       doc.pair("Saldo total de pontos", points_balance_after_sale.to_s, bold: true)
 

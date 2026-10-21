@@ -6,8 +6,12 @@ class Sale < ApplicationRecord
   # continuam usando o total dos produtos.
   CHARGED_AMOUNT_SQL = "COALESCE(sales.final_amount, sales.total_amount)".freeze
 
+  # Venda sem cadastro: sem cliente, com um nome livre e sem pontos
+  GUEST_NAME_MAX_LENGTH = 60
+  DEFAULT_GUEST_NAME = "Consumidor final".freeze
+
   belongs_to :store
-  belongs_to :customer
+  belongs_to :customer, optional: true
   belongs_to :user
 
   # Cupom de recompensa utilizado nesta venda (no máximo um)
@@ -17,6 +21,7 @@ class Sale < ApplicationRecord
   has_many :points_transactions
 
   validates :total_amount, presence: true
+  validates :guest_name, presence: true, length: { maximum: GUEST_NAME_MAX_LENGTH }, if: :guest?
   validates :total_amount,
             numericality: {
               greater_than_or_equal_to: 0,
@@ -44,6 +49,16 @@ class Sale < ApplicationRecord
               less_than_or_equal_to: 100
             },
             allow_nil: true
+
+  # Sem cliente vinculado (nem pelo ID nem por um cliente ainda não salvo)
+  def guest?
+    customer_id.nil? && customer.nil?
+  end
+
+  # Nome exibido na venda: cliente cadastrado ou o nome dado pelo vendedor
+  def customer_name
+    customer&.name || guest_name.presence || DEFAULT_GUEST_NAME
+  end
 
   def card?
     payment_method == "cartao"

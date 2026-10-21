@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getSaleCustomerName } from "./saleCustomer";
 import {
   getChargedAmount,
   getPaymentMethod,
@@ -223,7 +224,7 @@ export function buildSalesReportPdf({
       ? sales.map((sale) => [
           `#${sale.id}`,
           formatDateTime(sale.created_at),
-          sale.customer?.name || "Cliente não informado",
+          getSaleCustomerName(sale),
           sale.user?.name || "Não informado",
           getPaymentMethod(sale.payment_method).label,
           Number(sale.discount_amount) > 0

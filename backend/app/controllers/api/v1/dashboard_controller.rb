@@ -78,6 +78,7 @@ class Api::V1::DashboardController < ApplicationController
                      FROM sales
                      WHERE created_at >= ?
                        AND store_id = ?
+                       AND customer_id IS NOT NULL
                    )",
                    cutoff,
                    current_store.id

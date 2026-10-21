@@ -41,7 +41,8 @@ class Api::V1::SalesController < ApplicationController
   # Body esperado:
   # {
   #   "sale": {
-  #     "customer_id": 1,
+  #     "customer_id": 1,              # vazio = venda sem cadastro (não gera pontos)
+  #     "guest_name": "Maria",         # nome livre da venda sem cadastro (opcional)
   #     "payment_method": "pix" | "dinheiro" | "cartao",
   #     "final_amount": 96.5,          # obrigatório no cartão (valor da maquininha)
   #     "card_fee_percentage": 3.5,    # opcional, só no cartão
@@ -56,7 +57,20 @@ class Api::V1::SalesController < ApplicationController
   #   }
   # }
   def create
-    customer = current_store.customers.find(sale_params[:customer_id])
+    # Sem customer_id = venda sem cadastro: usa um nome livre e não gera pontos
+    guest = sale_params[:customer_id].blank?
+    customer = guest ? nil : current_store.customers.find(sale_params[:customer_id])
+    guest_name =
+      if guest
+        sale_params[:guest_name].to_s.squish.presence || Sale::DEFAULT_GUEST_NAME
+      end
+
+    if guest_name && guest_name.length > Sale::GUEST_NAME_MAX_LENGTH
+      return render json: {
+        error: "O nome do cliente pode ter no máximo #{Sale::GUEST_NAME_MAX_LENGTH} caracteres"
+      }, status: :unprocessable_entity
+    end
+
     items = sale_params[:sale_items] || []
 
     if items.blank?
@@ -87,12 +101,13 @@ class Api::V1::SalesController < ApplicationController
       }, status: :unprocessable_entity
     end
 
+    # A regra de pontos só é necessária quando a venda tem cliente cadastrado
     rule = current_store.loyalty_rules
                          .where(active: true)
                          .order(active_from: :desc)
                          .first
 
-    if rule.nil?
+    if customer && rule.nil?
       return render json: {
         error: "Nenhuma regra de pontuação ativa configurada"
       }, status: :unprocessable_entity
@@ -111,6 +126,12 @@ class Api::V1::SalesController < ApplicationController
 
     # Cupom de recompensa (opcional): precisa ser do próprio cliente
     coupon = nil
+
+    if sale_params[:coupon_id].present? && guest
+      return render json: {
+        error: "Venda sem cadastro não pode usar cupom de recompensa"
+      }, status: :unprocessable_entity
+    end
 
     if sale_params[:coupon_id].present?
       coupon = customer.reward_redemptions
@@ -136,8 +157,14 @@ class Api::V1::SalesController < ApplicationController
       discount_amount = coupon ? coupon.discount_for(total_amount) : 0.to_d
       amount_due = total_amount - discount_amount
 
-      # Pontos sobre o valor dos produtos menos o desconto do cupom
-      points_earned = (amount_due * rule.points_per_currency_unit.to_d).floor
+      # Pontos sobre o valor dos produtos menos o desconto do cupom;
+      # venda sem cadastro não gera pontos
+      points_earned =
+        if customer
+          (amount_due * rule.points_per_currency_unit.to_d).floor
+        else
+          0
+        end
 
       # Valor cobrado: no cartão vem da maquininha; nos demais é o valor a pagar
       final_amount = card ? sale_params[:final_amount].to_d : amount_due
@@ -156,6 +183,7 @@ class Api::V1::SalesController < ApplicationController
 
       sale = current_store.sales.create!(
         customer: customer,
+        guest_name: guest_name,
         user: current_user,
         total_amount: total_amount,
         discount_amount: discount_amount,
@@ -176,23 +204,25 @@ class Api::V1::SalesController < ApplicationController
 
       coupon&.update!(status: :used, used_at: Time.current)
 
-      customer.lock!
-      new_balance = customer.points_balance + points_earned
+      if customer
+        customer.lock!
+        new_balance = customer.points_balance + points_earned
 
-      customer.update!(
-        points_balance: new_balance
-      )
+        customer.update!(
+          points_balance: new_balance
+        )
 
-      PointsTransaction.create!(
-        store: current_store,
-        user: current_user,
-        customer: customer,
-        sale: sale,
-        transaction_type: :earned,
-        points: points_earned,
-        balance_after: new_balance,
-        description: "Pontos gerados pela venda ##{sale.id}"
-      )
+        PointsTransaction.create!(
+          store: current_store,
+          user: current_user,
+          customer: customer,
+          sale: sale,
+          transaction_type: :earned,
+          points: points_earned,
+          balance_after: new_balance,
+          description: "Pontos gerados pela venda ##{sale.id}"
+        )
+      end
     end
 
     # Toda venda gera um recibo; se a impressão falhar, a venda continua salva
@@ -254,6 +284,7 @@ class Api::V1::SalesController < ApplicationController
     {
       only: [
         :id,
+        :guest_name,
         :total_amount,
         :discount_amount,
         :final_amount,
@@ -327,6 +358,7 @@ class Api::V1::SalesController < ApplicationController
   def sale_params
     params.require(:sale).permit(
       :customer_id,
+      :guest_name,
       :payment_method,
       :final_amount,
       :card_fee_percentage,

@@ -1,5 +1,6 @@
 import { Eye, ShoppingCart } from "lucide-react";
 import PaymentMethodBadge from "./PaymentMethodBadge";
+import { getSaleCustomerName, isGuestSale } from "../../utils/saleCustomer";
 import { getChargedAmount } from "../../utils/payment";
 
 export default function SalesTable({ sales = [], onView }) {
@@ -84,7 +85,12 @@ export default function SalesTable({ sales = [], onView }) {
                   <td className="px-6 py-4">
                     <div>
                       <p className="text-sm font-semibold text-slate-800">
-                        {sale.customer?.name || "Cliente não informado"}
+                        {getSaleCustomerName(sale)}
+                        {isGuestSale(sale) && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 align-middle text-[11px] font-medium text-slate-500">
+                            Sem cadastro
+                          </span>
+                        )}
                       </p>
 
                       <p className="mt-0.5 text-xs text-slate-400">

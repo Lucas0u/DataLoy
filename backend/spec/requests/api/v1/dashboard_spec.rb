@@ -78,6 +78,19 @@ RSpec.describe "Api::V1::Dashboard", type: :request do
       end
     end
 
+    context "com venda sem cadastro" do
+      it "continua listando os clientes sem compras recentes" do
+        inactive = create(:customer, store: store, name: "Sem compras")
+        create(:sale, store: store, customer: nil, guest_name: "Avulso", user: admin)
+
+        get "/api/v1/dashboard", headers: auth_headers(admin)
+
+        names = json_response["inactive_customers"].map { |customer| customer["name"] }
+
+        expect(names).to include(inactive.name)
+      end
+    end
+
     context "quando funcionário" do
       it "retorna status 403" do
         get "/api/v1/dashboard", headers: auth_headers(employee)

@@ -1,7 +1,34 @@
 require "rails_helper"
 
 RSpec.describe Sale, type: :model do
-  it { should belong_to(:customer) }
+  it { should belong_to(:customer).optional }
+
+  describe "venda sem cadastro" do
+    it "é válida sem cliente quando tem o nome informado" do
+      sale = build(:sale, customer: nil, guest_name: "Maria")
+
+      expect(sale).to be_valid
+      expect(sale).to be_guest
+      expect(sale.customer_name).to eq("Maria")
+    end
+
+    it "exige o nome quando não tem cliente" do
+      expect(build(:sale, customer: nil, guest_name: nil)).not_to be_valid
+    end
+
+    it "limita o tamanho do nome" do
+      sale = build(:sale, customer: nil, guest_name: "A" * (Sale::GUEST_NAME_MAX_LENGTH + 1))
+
+      expect(sale).not_to be_valid
+    end
+
+    it "usa o nome do cliente cadastrado quando há cliente" do
+      sale = build(:sale)
+
+      expect(sale).not_to be_guest
+      expect(sale.customer_name).to eq(sale.customer.name)
+    end
+  end
   it { should belong_to(:user) }
   it { should have_many(:sale_items).dependent(:destroy) }
   it { should validate_presence_of(:total_amount) }

@@ -292,6 +292,85 @@ RSpec.describe "Api::V1::Sales", type: :request do
       end
     end
 
+    context "venda sem cadastro" do
+      def guest_params(guest_name: "Maria da feira")
+        sale_params.deep_merge(sale: { customer_id: nil, guest_name: guest_name })
+      end
+
+      it "registra a venda com o nome informado e sem cliente" do
+        post "/api/v1/sales", params: guest_params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+
+        sale = Sale.last
+
+        expect(sale.customer).to be_nil
+        expect(sale.guest_name).to eq("Maria da feira")
+        expect(sale.total_amount).to eq(100.0)
+        expect(sale.final_amount).to eq(100.0)
+      end
+
+      it "não gera pontos" do
+        expect {
+          post "/api/v1/sales", params: guest_params, headers: auth_headers(admin)
+        }.not_to change(PointsTransaction, :count)
+
+        expect(Sale.last.points_earned).to eq(0)
+      end
+
+      it "usa 'Consumidor final' quando o vendedor não informa nome" do
+        post "/api/v1/sales", params: guest_params(guest_name: "  "), headers: auth_headers(admin)
+
+        expect(Sale.last.guest_name).to eq(Sale::DEFAULT_GUEST_NAME)
+      end
+
+      it "funciona mesmo sem regra de pontuação ativa" do
+        loyalty_rule.update!(active: false)
+
+        post "/api/v1/sales", params: guest_params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+      end
+
+      it "não aceita cupom de recompensa" do
+        coupon = create(:reward_redemption, store: store, customer: customer)
+
+        post "/api/v1/sales",
+             params: guest_params.deep_merge(sale: { coupon_id: coupon.id }),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(coupon.reload).to be_available
+      end
+
+      it "não aceita nome acima do limite" do
+        post "/api/v1/sales",
+             params: guest_params(guest_name: "A" * (Sale::GUEST_NAME_MAX_LENGTH + 1)),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+
+      it "vendedor também pode registrar" do
+        employee = create(:user, role: :employee, store: store)
+
+        post "/api/v1/sales", params: guest_params, headers: auth_headers(employee)
+
+        expect(response).to have_http_status(:created)
+      end
+
+      it "aparece na listagem com o nome informado" do
+        post "/api/v1/sales", params: guest_params, headers: auth_headers(admin)
+
+        get "/api/v1/sales", headers: auth_headers(admin)
+
+        sale_json = json_response["data"].first
+
+        expect(sale_json["customer"]).to be_nil
+        expect(sale_json["guest_name"]).to eq("Maria da feira")
+      end
+    end
+
     context "recibo" do
       it "informa que o recibo não foi impresso quando não há impressora" do
         post "/api/v1/sales", params: sale_params, headers: auth_headers(admin)

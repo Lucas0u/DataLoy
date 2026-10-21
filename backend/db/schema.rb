@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -110,9 +110,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   create_table "sales", force: :cascade do |t|
     t.decimal "card_fee_percentage", precision: 5, scale: 2
     t.datetime "created_at", null: false
-    t.bigint "customer_id", null: false
+    t.bigint "customer_id"
     t.decimal "discount_amount", precision: 10, scale: 2, default: "0.0", null: false
     t.decimal "final_amount", precision: 10, scale: 2
+    t.string "guest_name"
     t.string "payment_method"
     t.integer "points_earned", default: 0, null: false
     t.bigint "reward_redemption_id"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Printer, X } from "lucide-react";
 import ReceiptModal from "./ReceiptModal";
 import PaymentMethodBadge from "./PaymentMethodBadge";
+import { getSaleCustomerName, isGuestSale } from "../../utils/saleCustomer";
 import { getChargedAmount } from "../../utils/payment";
 
 export default function SaleDetailsModal({ sale, onClose }) {
@@ -60,8 +61,14 @@ export default function SaleDetailsModal({ sale, onClose }) {
               </p>
 
               <p className="mt-2 text-sm font-semibold text-slate-800">
-                {sale.customer?.name || "Cliente não informado"}
+                {getSaleCustomerName(sale)}
               </p>
+
+              {isGuestSale(sale) && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Venda sem cadastro · não gerou pontos
+                </p>
+              )}
             </div>
 
             <div className="rounded-xl bg-slate-50 p-4">
