@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { getHomePath } from "../utils/roles";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
@@ -20,8 +21,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate("/dashboard");
+      const loggedUser = await login(email, password);
+      navigate(getHomePath(loggedUser));
     } catch (error) {
       setError(error.response?.data?.error || "Não foi possível fazer login.");
     } finally {

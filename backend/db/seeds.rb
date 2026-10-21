@@ -14,6 +14,17 @@ admin.store = store
 
 admin.save!
 
+# Usuário vendedor (perfil "employee")
+seller = User.find_or_initialize_by(email: "vendedor@dataloy.com")
+
+seller.name = "Vendedor"
+seller.password = "123456" if seller.new_record?
+seller.role = :employee
+seller.active = true
+seller.store = store
+
+seller.save!
+
 # Regra de pontuação padrão
 # R$ 1,00 gasto = 1 ponto
 LoyaltyRule.find_or_create_by!(store: store, active: true) do |rule|
@@ -26,5 +37,6 @@ puts "DataLoy - Seed executado com sucesso!"
 puts "======================================"
 puts "Loja: #{store.name}"
 puts "Admin: #{admin.email}"
+puts "Vendedor: #{seller.email}"
 puts "Regra: R$ 1,00 = 1 ponto"
 puts "======================================"

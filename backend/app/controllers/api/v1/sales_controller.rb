@@ -142,6 +142,13 @@ class Api::V1::SalesController < ApplicationController
       # Valor cobrado: no cartão vem da maquininha; nos demais é o valor a pagar
       final_amount = card ? sale_params[:final_amount].to_d : amount_due
 
+      # A maquininha não pode cobrar mais do que o total da compra
+      if card && final_amount > amount_due
+        raise SaleError,
+              "O valor cobrado na maquininha (R$ #{Receipts::SaleReceipt.money(final_amount)}) " \
+              "não pode ser maior que o total da compra (R$ #{Receipts::SaleReceipt.money(amount_due)})"
+      end
+
       card_fee_percentage =
         if card && sale_params[:card_fee_percentage].present?
           sale_params[:card_fee_percentage].to_d
@@ -161,7 +168,7 @@ class Api::V1::SalesController < ApplicationController
 
       items.each do |item|
         sale.sale_items.create!(
-          product_name: item[:product_name],
+          product_name: item[:product_name].to_s.strip,
           quantity: item[:quantity],
           unit_price: item[:unit_price]
         )
@@ -303,6 +310,10 @@ class Api::V1::SalesController < ApplicationController
 
       if item[:product_name].blank? || quantity <= 0 || unit_price.negative?
         return "Preencha corretamente todos os produtos da venda"
+      end
+
+      if item[:product_name].to_s.strip.length > SaleItem::PRODUCT_NAME_MAX_LENGTH
+        return "O nome do produto pode ter no máximo #{SaleItem::PRODUCT_NAME_MAX_LENGTH} caracteres"
       end
 
       if quantity > Sale::MAX_AMOUNT || unit_price > Sale::MAX_AMOUNT

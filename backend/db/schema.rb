@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -83,6 +83,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.boolean "active", default: true, null: false
     t.integer "coupon_validity_days"
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.text "description"
     t.string "discount_type", default: "fixed", null: false
     t.decimal "discount_value", precision: 10, scale: 2
@@ -92,6 +93,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.bigint "store_id"
     t.datetime "updated_at", null: false
     t.date "valid_until"
+    t.index ["deleted_at"], name: "index_rewards_on_deleted_at"
     t.index ["store_id"], name: "index_rewards_on_store_id"
   end
 

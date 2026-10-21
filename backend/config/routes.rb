@@ -5,7 +5,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       post "login", to: "sessions#create"
       delete "logout", to: "sessions#destroy"
-      resources :rewards, except: [:destroy]
+      resources :rewards
       post "rewards/:id/redeem", to: "rewards#redeem"
       get "dashboard", to: "dashboard#index"
       get "reports", to: "reports#index"

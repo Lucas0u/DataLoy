@@ -8,6 +8,19 @@ import {
 } from "../../utils/coupon";
 import { MAX_AMOUNT, PAYMENT_METHODS, limitAmount } from "../../utils/payment";
 
+// Mesmo limite do backend (SaleItem::PRODUCT_NAME_MAX_LENGTH)
+const PRODUCT_NAME_MAX_LENGTH = 60;
+
+// Item preenchido = nome, quantidade e preço informados
+function isItemFilled(item) {
+  return (
+    item.product_name.trim() !== "" &&
+    Number(item.quantity) > 0 &&
+    item.unit_price !== "" &&
+    Number(item.unit_price) >= 0
+  );
+}
+
 export default function SaleFormModal({ onClose, onSuccess }) {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState("");
@@ -102,6 +115,9 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   }
 
   function addItem() {
+    // Só adiciona um novo item quando os anteriores estão preenchidos
+    if (!items.every(isItemFilled)) return;
+
     setItems((currentItems) => [
       ...currentItems,
       {
@@ -231,6 +247,15 @@ export default function SaleFormModal({ onClose, onSuccess }) {
       return;
     }
 
+    if (isCard && Number(finalAmount) > calculateAmountDue() + 0.001) {
+      setError(
+        `O valor cobrado na maquininha não pode ser maior que o total da compra (${formatCurrency(
+          calculateAmountDue()
+        )}).`
+      );
+      return;
+    }
+
     if (isCard && Number(finalAmount) > MAX_AMOUNT) {
       setError(`O valor cobrado não pode passar de R$ ${limitFormatted},00.`);
       return;
@@ -271,6 +296,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   }
 
   const itemsTotal = calculateTotal();
+  const canAddItem = items.every(isItemFilled);
   const selectedCoupon = getSelectedCoupon();
   const couponDiscount = calculateCouponDiscount(selectedCoupon, itemsTotal);
   const amountDue = itemsTotal - couponDiscount;
@@ -278,6 +304,8 @@ export default function SaleFormModal({ onClose, onSuccess }) {
   // No cartão, o total da compra passa a ser o valor cobrado na maquininha
   const usesChargedAmount = paymentMethod === "cartao" && finalAmount !== "";
   const total = usesChargedAmount ? Number(finalAmount) : amountDue;
+  const chargedAboveTotal =
+    usesChargedAmount && Number(finalAmount) > amountDue + 0.001;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -354,15 +382,26 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                     Produtos
                   </h3>
 
-                  <p className="mt-1 text-xs text-slate-500">
-                    Adicione os itens que fazem parte da venda.
+                  <p
+                    className={`mt-1 text-xs ${
+                      canAddItem ? "text-slate-500" : "text-amber-600"
+                    }`}
+                  >
+                    {canAddItem
+                      ? "Adicione os itens que fazem parte da venda."
+                      : "Preencha produto, quantidade e preço para adicionar outro item."}
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={addItem}
-                  disabled={saving}
+                  disabled={saving || !canAddItem}
+                  title={
+                    canAddItem
+                      ? undefined
+                      : "Preencha o item atual para adicionar outro"
+                  }
                   className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Plus size={16} />
@@ -394,10 +433,21 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                             )
                           }
                           placeholder="Ex.: Camiseta básica"
+                          maxLength={PRODUCT_NAME_MAX_LENGTH}
                           disabled={saving}
                           required
                           className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
                         />
+
+                        <p
+                          className={`mt-1 text-right text-[11px] ${
+                            item.product_name.length >= PRODUCT_NAME_MAX_LENGTH
+                              ? "font-semibold text-amber-600"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          {item.product_name.length}/{PRODUCT_NAME_MAX_LENGTH}
+                        </p>
                       </div>
 
                       {/* Quantidade */}
@@ -574,7 +624,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                     id="final-amount"
                     type="number"
                     min="0"
-                    max={MAX_AMOUNT}
+                    max={amountDue}
                     step="0.01"
                     value={finalAmount}
                     onChange={(event) =>
@@ -583,8 +633,20 @@ export default function SaleFormModal({ onClose, onSuccess }) {
                     placeholder="Digite o valor que a maquininha retornou"
                     disabled={saving}
                     required
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"
+                    aria-invalid={chargedAboveTotal}
+                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:ring-4 ${
+                      chargedAboveTotal
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-500/10"
+                        : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
+                    }`}
                   />
+
+                  {chargedAboveTotal && (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">
+                      O valor cobrado não pode ser maior que o total da compra (
+                      {formatCurrency(amountDue)}).
+                    </p>
+                  )}
 
                   {/* Opção secundária: calcular pela taxa */}
                   {!showFeeCalculator ? (
@@ -708,7 +770,7 @@ export default function SaleFormModal({ onClose, onSuccess }) {
 
             <button
               type="submit"
-              disabled={saving || loadingCustomers}
+              disabled={saving || loadingCustomers || chargedAboveTotal}
               className="rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
             >
               {saving ? "Registrando..." : "Registrar venda"}

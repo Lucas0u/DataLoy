@@ -40,6 +40,46 @@ RSpec.describe Customer, type: :model do
       expect(customer).not_to be_valid
     end
 
+    describe "telefone no padrão brasileiro" do
+      it "aceita celular com DDD" do
+        customer.phone = "75999998888"
+
+        expect(customer).to be_valid
+      end
+
+      it "aceita telefone fixo com DDD" do
+        customer.phone = "7532814455"
+
+        expect(customer).to be_valid
+      end
+
+      it "aceita telefone formatado e guarda só os números" do
+        customer.phone = "(75) 99999-8888"
+        customer.valid?
+
+        expect(customer.phone).to eq("75999998888")
+        expect(customer).to be_valid
+      end
+
+      it "não aceita telefone sem DDD" do
+        customer.phone = "999998888"
+
+        expect(customer).not_to be_valid
+      end
+
+      it "não aceita DDD começando com zero" do
+        customer.phone = "07999998888"
+
+        expect(customer).not_to be_valid
+      end
+
+      it "não aceita celular de 11 dígitos que não começa com 9" do
+        customer.phone = "75899998888"
+
+        expect(customer).not_to be_valid
+      end
+    end
+
     it "não permite saldo de pontos negativo" do
       customer.points_balance = -1
 

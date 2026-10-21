@@ -1,5 +1,6 @@
 import { Bell } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { getRoleLabel } from "../../utils/roles";
 import { useAuth } from "../../contexts/AuthContext";
 
 const PAGE_TITLES = [
@@ -55,7 +56,7 @@ export default function Header() {
                 {user?.name || "Usuário"}
               </p>
               <p className="text-xs text-slate-400">
-                {user?.role || "Colaborador"}
+                {getRoleLabel(user?.role)}
               </p>
             </div>
           </div>

@@ -351,6 +351,48 @@ RSpec.describe "Api::V1::Sales", type: :request do
       end
     end
 
+    context "regras do valor da maquininha e do nome do produto" do
+      it "não aceita valor da maquininha maior que o total da compra" do
+        expect {
+          post "/api/v1/sales",
+               params: card_params(final_amount: 100.01),
+               headers: auth_headers(admin)
+        }.not_to change(Sale, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(json_response["error"]).to include("não pode ser maior que o total da compra")
+      end
+
+      it "aceita valor da maquininha igual ao total da compra" do
+        post "/api/v1/sales",
+             params: card_params(final_amount: 100),
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:created)
+      end
+
+      it "compara o valor da maquininha com o total já com o desconto do cupom" do
+        coupon = create(:reward_redemption, store: store, customer: customer,
+                                            discount_type: "fixed", discount_value: 20)
+        params = card_params(final_amount: 90).deep_merge(sale: { coupon_id: coupon.id })
+
+        post "/api/v1/sales", params: params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(coupon.reload).to be_available
+      end
+
+      it "não aceita nome de produto acima do limite de caracteres" do
+        params = sale_params.deep_dup
+        params[:sale][:sale_items][0][:product_name] = "A" * (SaleItem::PRODUCT_NAME_MAX_LENGTH + 1)
+
+        post "/api/v1/sales", params: params, headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(json_response["error"]).to include("no máximo #{SaleItem::PRODUCT_NAME_MAX_LENGTH} caracteres")
+      end
+    end
+
     context "quando os valores passam de 1.000.000" do
       it "recusa preço unitário acima do limite" do
         params = sale_params.deep_dup

@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Gift, Plus } from "lucide-react";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import { isAdmin as isAdminUser } from "../utils/roles";
 import RewardCard from "../components/rewards/RewardCard";
 import RewardFormModal from "../components/rewards/RewardFormModal";
 import RedeemModal from "../components/rewards/RedeemModal";
 
 export default function Rewards() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminUser(user);
 
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,24 @@ export default function Rewards() {
       loadRewards();
     } catch {
       setError("Não foi possível atualizar o status da recompensa.");
+    }
+  }
+
+  async function handleDelete(reward) {
+    const confirmed = window.confirm(
+      `Excluir a recompensa "${reward.name}"?\n\nEla deixa de aparecer no sistema. Os cupons já resgatados pelos clientes continuam válidos.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      await api.delete(`/api/v1/rewards/${reward.id}`);
+      loadRewards();
+    } catch (err) {
+      setError(
+        err.response?.data?.error || "Não foi possível excluir a recompensa."
+      );
     }
   }
 
@@ -125,6 +144,7 @@ export default function Rewards() {
               reward={reward}
               onEdit={handleEdit}
               onToggleActive={handleToggleActive}
+              onDelete={handleDelete}
               onRedeem={setRedeemingReward}
               isAdmin={isAdmin}
             />

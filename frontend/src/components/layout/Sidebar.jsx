@@ -9,12 +9,14 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { isAdmin } from "../../utils/roles";
 
 const menuItems = [
   {
     label: "Dashboard",
     path: "/dashboard",
     icon: LayoutDashboard,
+    adminOnly: true,
   },
   {
     label: "Clientes",
@@ -40,11 +42,17 @@ const menuItems = [
     label: "Relatórios",
     path: "/relatorios",
     icon: BarChart3,
+    adminOnly: true,
   },
 ];
 
 export default function Sidebar() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+
+  // Vendedor não vê Dashboard nem Relatórios
+  const visibleItems = menuItems.filter(
+    (item) => !item.adminOnly || isAdmin(user)
+  );
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-gradient-to-b from-slate-950 via-slate-950 to-indigo-950 text-white">
@@ -64,7 +72,7 @@ export default function Sidebar() {
         </p>
 
         <div className="space-y-1">
-          {menuItems.map((item) => {
+          {visibleItems.map((item) => {
             const Icon = item.icon;
 
             return (

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import api from "../services/api";
 import { getChargedAmount } from "../utils/payment";
+import { maskPhone } from "../utils/masks";
 import { formatDate, formatDiscount, getCouponStatus } from "../utils/coupon";
 
 export default function CustomerDetail() {
@@ -101,7 +102,7 @@ export default function CustomerDetail() {
               )}
               {customer.phone && (
                 <span className="flex items-center gap-1.5">
-                  <Phone size={15} /> {customer.phone}
+                  <Phone size={15} /> {maskPhone(customer.phone)}
                 </span>
               )}
             </div>

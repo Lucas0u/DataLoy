@@ -1,10 +1,10 @@
 class Api::V1::RewardsController < ApplicationController
-  before_action :set_reward, only: [:show, :update, :redeem]
-  before_action :require_admin!, only: [:create, :update]
+  before_action :set_reward, only: [:show, :update, :redeem, :destroy]
+  before_action :require_admin!, only: [:create, :update, :destroy]
 
   # GET /api/v1/rewards
   def index
-    rewards = current_store.rewards.order(points_required: :asc)
+    rewards = current_store.rewards.kept.order(points_required: :asc)
 
     rewards = rewards.where(active: true) if params[:active] == "true"
 
@@ -40,6 +40,21 @@ class Api::V1::RewardsController < ApplicationController
         errors: @reward.errors.full_messages
       }, status: :unprocessable_entity
     end
+  end
+
+  # DELETE /api/v1/rewards/:id
+  # Somente admin e somente recompensas desativadas.
+  # Exclusão lógica: cupons já resgatados continuam válidos.
+  def destroy
+    if @reward.active?
+      return render json: {
+        error: "Desative a recompensa antes de excluí-la."
+      }, status: :unprocessable_entity
+    end
+
+    @reward.update!(deleted_at: Time.current)
+
+    render json: { message: "Recompensa excluída." }, status: :ok
   end
 
   # POST /api/v1/rewards/:id/redeem
@@ -121,7 +136,7 @@ class Api::V1::RewardsController < ApplicationController
   class RedeemError < StandardError; end
 
   def set_reward
-    @reward = current_store.rewards.find(params[:id])
+    @reward = current_store.rewards.kept.find(params[:id])
   rescue ActiveRecord::RecordNotFound
     render json: {
       error: "Recompensa não encontrada"

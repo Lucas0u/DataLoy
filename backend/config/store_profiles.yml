@@ -44,10 +44,10 @@ default:
 
 stores:
   1:
-    trade_name: "Miss Story"
-    legal_name: "Miss Story Comércio de Artigos de Vestuário LTDA"
+    trade_name: "Loja 01"
+    legal_name: "Comércio de Vestuário LTDA"
     cnpj: "00.000.000/0001-00"        # TROCAR pelo CNPJ real
     state_registration: ""
     address: "Rua Exemplo, 123 - Centro"
-    city: "Paulo Afonso - BA"
-    phone: "(75) 99999-9999"
+    city: "Cidade - UF"
+    phone: "(99) 99999-9999"

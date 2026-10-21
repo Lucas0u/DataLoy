@@ -113,6 +113,67 @@ RSpec.describe "Api::V1::Rewards", type: :request do
     end
   end
 
+  describe "DELETE /api/v1/rewards/:id" do
+    let(:reward) { create(:reward, store: store, active: false) }
+
+    context "quando administrador" do
+      it "exclui uma recompensa desativada" do
+        delete "/api/v1/rewards/#{reward.id}", headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:ok)
+        expect(reward.reload.deleted_at).to be_present
+      end
+
+      it "a recompensa excluída some da listagem" do
+        delete "/api/v1/rewards/#{reward.id}", headers: auth_headers(admin)
+
+        get "/api/v1/rewards", headers: auth_headers(admin)
+
+        expect(json_response.map { |item| item["id"] }).not_to include(reward.id)
+      end
+
+      it "mantém os cupons já resgatados com essa recompensa" do
+        coupon = create(:reward_redemption, store: store, reward: reward,
+                                            customer: create(:customer, store: store))
+
+        delete "/api/v1/rewards/#{reward.id}", headers: auth_headers(admin)
+
+        expect(coupon.reload).to be_usable
+        expect(coupon.reward).to eq(reward)
+      end
+
+      it "não exclui recompensa ativa" do
+        reward.update!(active: true)
+
+        delete "/api/v1/rewards/#{reward.id}", headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(json_response["error"]).to include("Desative a recompensa")
+        expect(reward.reload.deleted_at).to be_nil
+      end
+
+      it "não permite resgatar recompensa excluída" do
+        reward.update!(deleted_at: Time.current)
+        customer = create(:customer, store: store, points_balance: 500)
+
+        post "/api/v1/rewards/#{reward.id}/redeem",
+             params: { customer_id: customer.id },
+             headers: auth_headers(admin)
+
+        expect(response).to have_http_status(:not_found)
+      end
+    end
+
+    context "quando funcionário" do
+      it "retorna 403" do
+        delete "/api/v1/rewards/#{reward.id}", headers: auth_headers(employee)
+
+        expect(response).to have_http_status(:forbidden)
+        expect(reward.reload.deleted_at).to be_nil
+      end
+    end
+  end
+
   describe "POST /api/v1/rewards/:id/redeem" do
     let(:customer) { create(:customer, store: store, points_balance: 500) }
     let(:reward) do

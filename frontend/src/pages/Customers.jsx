@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Users } from "lucide-react";
 import api from "../services/api";
+import { maskPhone } from "../utils/masks";
 import CustomerFormModal from "../components/customers/CustomerFormModal";
 
 export default function Customers() {
@@ -176,7 +177,7 @@ export default function Customers() {
                   <td className="px-6 py-4 text-slate-500">
                     <div>{customer.email || "—"}</div>
                     <div className="text-xs text-slate-400">
-                      {customer.phone || "—"}
+                      {customer.phone ? maskPhone(customer.phone) : "—"}
                     </div>
                   </td>
                   <td className="px-6 py-4">

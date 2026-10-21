@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import api from "../../services/api";
+import {
+  isValidCpfLength,
+  isValidPhone,
+  maskCpf,
+  maskPhone,
+  onlyDigits,
+} from "../../utils/masks";
 
 export default function CustomerFormModal({ customer, onClose, onSaved }) {
   const isEditing = Boolean(customer);
@@ -13,8 +20,8 @@ export default function CustomerFormModal({ customer, onClose, onSaved }) {
     if (customer) {
       setForm({
         name: customer.name || "",
-        cpf: customer.cpf || "",
-        phone: customer.phone || "",
+        cpf: maskCpf(customer.cpf || ""),
+        phone: maskPhone(customer.phone || ""),
         email: customer.email || "",
       });
     }
@@ -27,13 +34,35 @@ export default function CustomerFormModal({ customer, onClose, onSaved }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+
+    if (!isValidCpfLength(form.cpf)) {
+      setError("O CPF deve ter 11 dígitos.");
+      return;
+    }
+
+    if (!isValidPhone(form.phone)) {
+      setError(
+        "Informe o telefone com DDD: (DD) 9XXXX-XXXX para celular ou (DD) XXXX-XXXX para fixo."
+      );
+      return;
+    }
+
     setSaving(true);
+
+    // Envia só os números para o backend
+    const payload = {
+      ...form,
+      cpf: onlyDigits(form.cpf),
+      phone: onlyDigits(form.phone),
+    };
 
     try {
       if (isEditing) {
-        await api.put(`/api/v1/customers/${customer.id}`, { customer: form });
+        await api.put(`/api/v1/customers/${customer.id}`, {
+          customer: payload,
+        });
       } else {
-        await api.post("/api/v1/customers", { customer: form });
+        await api.post("/api/v1/customers", { customer: payload });
       }
       onSaved();
     } catch (err) {
@@ -92,12 +121,11 @@ export default function CustomerFormModal({ customer, onClose, onSaved }) {
             <input
               type="text"
               required
-              maxLength={11}
+              inputMode="numeric"
+              maxLength={14}
               value={form.cpf}
-              onChange={(e) =>
-                handleChange("cpf", e.target.value.replace(/\D/g, ""))
-              }
-              placeholder="Somente números"
+              onChange={(e) => handleChange("cpf", maskCpf(e.target.value))}
+              placeholder="000.000.000-00"
 
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
             />
@@ -109,10 +137,15 @@ export default function CustomerFormModal({ customer, onClose, onSaved }) {
                 Telefone
               </label>
               <input
-                type="text"
+                type="tel"
                 required
+                inputMode="numeric"
+                maxLength={15}
                 value={form.phone}
-                onChange={(e) => handleChange("phone", e.target.value)}
+                onChange={(e) =>
+                  handleChange("phone", maskPhone(e.target.value))
+                }
+                placeholder="(00) 00000-0000"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
               />
             </div>

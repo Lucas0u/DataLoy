@@ -6,6 +6,7 @@ import {
   Pencil,
   Power,
   Ticket,
+  Trash2,
 } from "lucide-react";
 import { formatDiscount } from "../../utils/coupon";
 
@@ -14,6 +15,7 @@ export default function RewardCard({
   onEdit,
   onToggleActive,
   onRedeem,
+  onDelete,
   isAdmin = false,
 }) {
   const isExpired =
@@ -126,9 +128,23 @@ export default function RewardCard({
               onClick={() => onToggleActive(reward)}
               className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
               aria-label={reward.active ? "Desativar" : "Ativar"}
+              title={reward.active ? "Desativar" : "Ativar"}
             >
               <Power size={17} />
             </button>
+
+            {/* Excluir só aparece em recompensas desativadas */}
+            {!reward.active && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(reward)}
+                className="rounded-xl border border-red-200 p-2.5 text-red-500 transition hover:bg-red-50"
+                aria-label="Excluir"
+                title="Excluir recompensa"
+              >
+                <Trash2 size={17} />
+              </button>
+            )}
           </>
         )}
       </div>

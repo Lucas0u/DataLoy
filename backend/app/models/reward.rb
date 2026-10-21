@@ -5,6 +5,9 @@ class Reward < ApplicationRecord
 
   has_many :reward_redemptions
 
+  # Recompensas que não foram excluídas
+  scope :kept, -> { where(deleted_at: nil) }
+
   validates :name, presence: true
   validates :points_required, presence: true, numericality: { greater_than: 0 }
   validates :quantity_available, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
@@ -34,7 +37,12 @@ class Reward < ApplicationRecord
     discount_type == "percentage"
   end
 
+  def deleted?
+    deleted_at.present?
+  end
+
   def redeemable?
+    return false if deleted?
     return false unless active?
     return false if discount_value.blank?
     return false if valid_until.present? && valid_until < Date.current

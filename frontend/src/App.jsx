@@ -10,6 +10,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Sales from "./pages/Sales";
 import Points from "./pages/Points";
 import Reports from "./pages/Reports";
+import { getHomePath, isAdmin } from "./utils/roles";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -33,7 +34,7 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getHomePath(user)} replace />;
   }
 
   return children;
@@ -45,6 +46,17 @@ function Protected({ children }) {
       <AppLayout>{children}</AppLayout>
     </ProtectedRoute>
   );
+}
+
+// Telas só do administrador: o vendedor é levado para a tela de vendas
+function AdminOnly({ children }) {
+  const { user } = useAuth();
+
+  if (user && !isAdmin(user)) {
+    return <Navigate to={getHomePath(user)} replace />;
+  }
+
+  return children;
 }
 
 export default function App() {
@@ -64,7 +76,9 @@ export default function App() {
           path="/dashboard"
           element={
             <Protected>
-              <Dashboard />
+              <AdminOnly>
+                <Dashboard />
+              </AdminOnly>
             </Protected>
           }
         />
@@ -112,7 +126,9 @@ export default function App() {
           path="/relatorios"
           element={
             <Protected>
-              <Reports />
+              <AdminOnly>
+                <Reports />
+              </AdminOnly>
             </Protected>
           }
         />
